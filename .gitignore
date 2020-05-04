@@ -1,6 +1,8 @@
 **/__pycache__
 **.swp
+**.swo
 **.gpickle
 **.pickle
 .cache
 plots
+results
