@@ -3,62 +3,29 @@ import os
 import sys; sys.path.append('.')
 import pandas as pd
 import numpy as np
+import networkx as nx
 import torch
-import pickle
+import matplotlib.pyplot as plt
 from models.gat.gat_pytorch import GAT
 from runners.tools import get_data
 
 # Args ----------------------------------------------------------
 organism = 'human'
-ppi = 'dip'
+ppi = 'string'
 expression = True
-sublocs = True
+sublocs = False
 orthologs = False
 
 ROOT = '/home/schapke/projects/research/2020_FEB_JUN/src'
 weightsdir = os.path.join(ROOT, 'models/gat/weights') 
-snapshot_name = f'{organism}_{ppi}_expression_sublocs'
+snapshot_name = f'{organism}_{ppi}'
+snapshot_name += '_expression' if expression else ''
+snapshot_name += '_sublocs' if sublocs else ''
+snapshot_name += '_orthologs' if orthologs else ''
 savepath = os.path.join(weightsdir, snapshot_name)
 # ---------------------------------------------------------------
 
-def main():
-    # Getting the data ----------------------------------
-    cache = 'interpretation/cache.pickle'
-    params = {
-        'organism': organism,
-        'ppi': ppi,
-        'expression': expression,
-        'sublocs': sublocs,
-        'orthologs': orthologs,
-        'no_ppi': False
-    }
-    #(edges, _), X, (train, test, genes = get_data(params, seed=0, parse=False)
-    (edges, _), X, (train_idx, train_y), (val_idx, val_y), \
-            (test_idx, test_y), genes = get_data(params, seed=0)
-
-    print('Fetched data')
-    # ---------------------------------------------------
-
-
-    # Model ---------------------------------------------
-    cache = './.cache/interpretation_results.pth'
-    if not os.path.isfile(cache):
-        snapshot = torch.load(savepath)
-        model = GAT(in_feats=X.shape[1], **snapshot['model_params']).cpu()
-        model.load_state_dict(snapshot['model_state_dict'])
-        model.cpu().eval()
-        print('Model loaded. Val AUC: {}'.format(snapshot['val_AUC']))
-
-        with torch.no_grad():
-            outs, alphas, _ = model(X, edges, return_alphas=True) 
-
-        torch.save([outs, alphas], cache)
-    else:
-        outs, alphas = torch.load(cache)
-
-    outs = torch.sigmoid(outs).numpy().squeeze()
-    # ---------------------------------------------------
-
+def single_node():
     # Processing ----------------------------------------
     idx = outs.argsort()[::-1]
     idx = [i for i in idx if i in test_idx]
@@ -104,10 +71,144 @@ def main():
     print(alphas[0].shape, edges.shape)
     print(len(genes))
     print(len(edges) + len(genes))
-
     print(nodes)
 
 
+def multi_node():
+    pass
+
+
+def main():
+
+    update = False
+    cache = '.cache/int_cache.npy'
+    os.makedirs('./cache', exist_ok=True)
+
+    if os.path.isfile(cache) and not update:
+        outs, att, edge_index, genes, train_idx, test_idx, val_idx, test_y, train_y, val_y = np.load(cache, allow_pickle=True)
+    else:
+        # Getting the data ----------------------------------
+        params = {
+            'organism': organism,
+            'ppi': ppi,
+            'expression': expression,
+            'sublocs': sublocs,
+            'orthologs': orthologs,
+            'no_ppi': False,
+            'use_weights': False,
+            'string_thr': 500
+        }
+        (edges, _), X, (train_idx, train_y), (val_idx, val_y), \
+                (test_idx, test_y), genes = get_data(params, seed=0)
+
+        print('Fetched data')
+        # ---------------------------------------------------
+
+
+        # Model ---------------------------------------------
+        snapshot = torch.load(savepath)
+        model = GAT(in_feats=X.shape[1], **snapshot['model_params']).cpu()
+        model.load_state_dict(snapshot['model_state_dict'])
+        model.cuda().eval()
+        print('Model loaded. Val Auc: {}'.format(snapshot['auc']))
+
+        with torch.no_grad():
+            outs, alphas, edge_index = model(X.cuda(), edges.cuda(), return_alphas=True) 
+
+        outs = torch.sigmoid(outs).cpu().numpy().squeeze()
+        att = torch.cat(alphas, dim=1)
+        att = att.cpu().numpy()
+        edge_index = edge_index.cpu().numpy().T
+        genes = np.array(genes)
+        # ---------------------------------------------------
+
+        np.save(cache, [outs, att, edge_index, genes, train_idx, test_idx, val_idx, test_y, train_y, val_y])
+
+
+    G = nx.DiGraph()
+    G.add_edges_from(edge_index)
+
+    nodes = [1]
+    neigs = list(G.neighbors(1))
+    nodes += neigs
+
+    for neig in neigs:
+        if len(nodes) > 500:
+            break
+
+        n = list(G.neighbors(neig))
+        nodes += n
+        nodes = np.unique(nodes).tolist()
+
+    all_nodes = list(G.nodes())
+    diff = np.setdiff1d(all_nodes, nodes)
+    G.remove_nodes_from(diff)
+    G.remove_edges_from(list(G.edges()))
+
+    mask1 = np.isin(edge_index[:, 0], nodes)
+    mask2 = np.isin(edge_index[:, 1], nodes)
+    mask = (mask1 & mask2)
+    edge_index = edge_index[mask]
+
+    att = att[mask]
+    att = att.mean(1)
+    mask = att > 0.01
+
+    att = att[mask] * 2.5
+    edge_index = edge_index[mask]
+
+
+    color = np.zeros((len(att), 4))
+    color[:, 2] = 0.35 
+    color[:, 1] = 0.4 
+    color[:, 0] = 1 
+    color[:, 3] = att
+
+    G.add_edges_from(edge_index)
+    G.remove_nodes_from(list(nx.isolates(G)))
+    nodes = list(G.nodes)
+
+    node_colors = np.zeros((len(G.nodes), 4)) 
+    node_colors[:, 3] = 0.8
+    for node in nodes:
+        y = -1
+        if node in train_idx:
+            idx = train_idx.index(node)
+            y = train_y[idx]
+
+        elif node in test_idx:
+            idx = test_idx.index(node)
+            y = test_y[idx]
+            i = nodes.index(node)
+
+        elif node in val_idx:
+            idx = val_idx.index(node)
+            y = val_y[idx]
+
+
+        node = nodes.index(node)
+        if y == 1:
+            node_colors[node, 1] = 1
+        elif y == 0:
+            node_colors[node, 0] = 1
+        else:
+            node_colors[node, 3] = 0.5
+
+    print('Len nodes', len(G.nodes))
+    print('Num Edges', len(G.edges))
+    print('Att:', att.min(), att.mean(), att.max())
+
+    plt.figure(figsize=(10, 10))
+    nx.draw_kamada_kawai(G, 
+            arrows=True, 
+            node_size=20, 
+            node_color=node_colors, 
+            edge_color=att, 
+            edge_cmap=plt.get_cmap('cividis'),
+            width=1,
+            ) 
+    plt.savefig('attention.pdf')
+    plt.show()
     # ---------------------------------------------------
 
 
