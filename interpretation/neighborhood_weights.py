@@ -80,7 +80,7 @@ def multi_node():
 
 def main():
 
-    update = False
+    update = True
     cache = '.cache/int_cache.npy'
     os.makedirs('./cache', exist_ok=True)
 
@@ -127,9 +127,15 @@ def main():
 
     G = nx.DiGraph()
     G.add_edges_from(edge_index)
+    
 
-    nodes = [1]
-    neigs = list(G.neighbors(1))
+    #for node in list(G.nodes):
+    #    print(node, len(list(G.neighbors(node))))
+    #return
+
+
+    nodes = [2412]
+    neigs = list(G.neighbors(nodes[0]))
     nodes += neigs
 
     for neig in neigs:
@@ -152,11 +158,12 @@ def main():
 
     att = att[mask]
     att = att.mean(1)
-    mask = att > 0.01
+    mask = att > 0.03
 
-    att = att[mask] * 2.5
+    att = att[mask]
     edge_index = edge_index[mask]
 
+    att = att / att.max()
 
     color = np.zeros((len(att), 4))
     color[:, 2] = 0.35 
@@ -198,14 +205,14 @@ def main():
     print('Num Edges', len(G.edges))
     print('Att:', att.min(), att.mean(), att.max())
 
-    plt.figure(figsize=(10, 10))
-    nx.draw_kamada_kawai(G, 
+    plt.figure(figsize=(8, 6))
+    nx.draw_kamada_kawai(
+            G, 
             arrows=True, 
             node_size=20, 
             node_color=node_colors, 
-            edge_color=att, 
-            edge_cmap=plt.get_cmap('cividis'),
-            width=1,
+            edge_color=color, 
+            width=1
             ) 
     plt.savefig('attention.pdf')
     plt.show()
