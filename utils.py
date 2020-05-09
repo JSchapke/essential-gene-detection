@@ -43,6 +43,21 @@ def set_seed(seed):
     torch.manual_seed(seed)
 
 
+def dim_reduction_cor(X, y, k=20):
+    cors = np.zeros((X.shape[1])) 
+
+    # calculate the correlation with y for each feature
+    for i in range(X.shape[1]):
+        cor = np.corrcoef(X[:, i], y)[0, 1]
+        if not np.isnan(cor):
+            cors[i] = cor
+
+    features = np.zeros_like(cors).astype(bool)
+    features[np.argsort(-cors)[:k]] = True
+
+    return features, cors
+
+
 def data(
     organism='yeast',
     ppi='string', 
@@ -53,17 +68,17 @@ def data(
     seed=0, 
     weights=False):
 
-    assert(organism in ['yeast', 'coli', 'human'])
-    assert(organism != 'coli' or not sublocalizations)
+    assert(organism in ['yeast', 'coli', 'human', 'melanogaster'])
+    assert(organism not in ['coli'] or not sublocalizations)
     assert(ppi in ['string', 'dip', 'biogrid'])
 
     print(f'\nGathering {organism} dataset.')
     print(f'PPI: {ppi}.')
 
     # Cache ----------
-    update = True
+    update = False
     cache = f'.cache/{organism}/'
-    cachepath = cache + f'{expression}_{orthologs}_{ppi}.pkl'
+    cachepath = cache + f'{expression}_{sublocalizations}_{orthologs}_{ppi}.pkl'
     os.makedirs(cache, exist_ok=True)
 
     if os.path.isfile(cachepath) and not update:
@@ -94,14 +109,27 @@ def data(
         index, edges = edges.index, edges.values
         genes = np.union1d(edges[:, 0], edges[:, 1])
         if edge_weights is not None: 
-            print(index.values.max())
             edge_weights = edge_weights.iloc[index.values].values
 
         path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/EssentialGenes/ogee.csv')
         labels = pd.read_csv(path).values
+        print('Number of Labels / Number of label genes in network:', len(labels), '/', len(np.intersect1d(genes, labels[:, 0])))
         genes = np.union1d(labels[:, 0], genes)
 
         X = np.zeros((len(genes), 0))
+
+
+        if orthologs:
+            path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/Orthologs/orthologs.csv')
+            orths = pd.read_csv(path)
+            print('Orthologs dataset shape:', orths.shape)
+
+            x = np.zeros((len(genes), orths.shape[1]-1))
+            for i, node in enumerate(genes):
+                mask = orths['Gene'] == node
+                if np.any(mask):
+                    x[i] = orths[mask].values.squeeze()[:-1]
+            X = np.concatenate([X, np.array(x)], axis=1)
 
         if expression:
             if organism == 'human':
@@ -118,17 +146,6 @@ def data(
                     x[i] = expression[mask][0, 1:]
             X = np.concatenate([X, x], axis=1)
 
-        if orthologs:
-            path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/Orthologs/orthologs.csv')
-            orths = pd.read_csv(path)
-            print('Orthologs dataset shape:', orths.shape)
-
-            x = np.zeros((len(genes), orths.shape[1]-1))
-            for i, node in enumerate(genes):
-                mask = orths['Gene'] == node
-                if np.any(mask):
-                    x[i] = orths[mask].values.squeeze()[:-1]
-            X = np.concatenate([X, np.array(x)], axis=1)
 
         if sublocalizations:
             path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/SubLocalizations/subloc.csv')
@@ -158,8 +175,8 @@ def data(
 
 if __name__ == '__main__':
     edge_info, X, train, test, genes = data(
-                organism='human', 
+                organism='melanogaster', 
                 ppi='dip', 
                 expression=True,
-                sublocalizations=True,
+                sublocalizations=False,
                 orthologs=True)
