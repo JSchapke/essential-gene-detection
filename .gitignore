@@ -6,3 +6,5 @@
 .cache
 plots
 results
+models/gat/weights
+.gitignore

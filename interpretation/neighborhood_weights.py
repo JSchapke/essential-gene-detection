@@ -164,6 +164,7 @@ def main():
     edge_index = edge_index[mask]
 
     att = att / att.max()
+    att[att < 0.10] = .10
 
     color = np.zeros((len(att), 4))
     color[:, 2] = 0.35 
@@ -214,7 +215,7 @@ def main():
             edge_color=color, 
             width=1
             ) 
-    plt.savefig('attention.pdf')
+    plt.savefig('attention.png')
     plt.show()
     # ---------------------------------------------------
 
