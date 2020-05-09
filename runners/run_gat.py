@@ -14,8 +14,8 @@ from models.gat import params as gat_params
 from utils import *
 from runners import tools
 
-#GAT_PARAMS  = gat_params.gat_small
-GAT_PARAMS  = gat_params.gat_medium
+GAT_PARAMS  = gat_params.gat_small
+#GAT_PARAMS  = gat_params.gat_medium
 #GAT_PARAMS  = gat_params.gat_large
 #GAT_PARAMS  = gat_params.gat_huge
 
@@ -59,7 +59,7 @@ def train(X, A,
         savepath='',
          ):
 
-    epochs = 2000
+    epochs = 1000
 
     model = GAT(in_feats=X.shape[1], **GAT_PARAMS)
     model.to(DEVICE)
@@ -70,7 +70,7 @@ def train(X, A,
     if edge_weights is not None:
         edge_weights = edge_weights.to(DEVICE)
 
-    wa = tools.WeightAveraging(model, 1500, 100)
+    wa = tools.WeightAveraging(model, epochs-500, 100)
     optimizer = optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     loss_fnc = tools.Loss(train_y, train_idx)
     val_loss_fnc = tools.Loss(val_y, val_idx)
@@ -95,7 +95,8 @@ def train(X, A,
 
     wa.set_weights()
     score = evalAUC(model, X, A, val_y, val_idx)
-    print(f'Final validation AUC: {score}')
+    print(f'Last validation AUC: {val_auc}')
+    print(f'WA validation AUC: {score}')
 
     if savepath:
         save = {
@@ -211,7 +212,8 @@ if __name__ == '__main__':
 
         df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
         df.to_csv(df_path, index=False)
-        print(df.head())
+        print('Final Result:', mean)
+        print(df.tail())
 
     else:
         main(args, name=name, seed=0)

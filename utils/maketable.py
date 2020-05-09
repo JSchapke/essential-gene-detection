@@ -4,7 +4,7 @@ df = pd.read_csv('results/results.csv')
 
 methods = ['DC', 'GAT', 'GAT_EXP', 'GAT_EXP_SUB', ['GAT_EXP_ORT', 'GAT_EXP_SUB_ORT']]
 
-orgs = ['yeast', 'coli']
+orgs = ['yeast', 'coli', 'human']
 ppis = ['dip', 'biogrid', 'string']
 
 print(methods)

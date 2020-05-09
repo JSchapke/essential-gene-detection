@@ -15,6 +15,7 @@ import sklearn.neural_network
 import networkx as nx
 sys.path.append('.')
 from utils import *
+from sklearn.feature_selection import SelectKBest, chi2, f_classif
 
 import torch
 import torch.nn as nn
@@ -36,27 +37,77 @@ class Loss():
         return loss
 
 def acc(t1, t2):
-    return np.sum(1.0*(t1==t2)) / len(t1)
+    return np.sum(t1*1==t2*1) / len(t1)
 
-def main():
-    args = tools.get_args()
+def run(train_x, train_y, test_x, test_y, val=None):
+    epochs = 1000
 
-    scores, roc_aucs = [], []
+    in_feats = train_x.shape[1]
+    model = nn.Sequential(
+                nn.Linear(in_feats, 32),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(32, 1))
+    optimizer = torch.optim.Adam(model.parameters())
+
+    lossf = Loss(train_y)
+
+    if val is not None:
+        val_x, val_y = val
+        lossf_val = Loss(val_y)
+
+    model.train()
+    model.cuda()
+
+    patience, cur_es = 3, 0
+    val_loss_old = np.Inf
+
+    for i in range(epochs):
+        out = model(train_x)
+        loss = lossf(out)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        if (i % 20) == 0:
+            if val is not None:
+                model.eval()
+                with torch.no_grad():
+                    loss_val = lossf_val(model(val_x))
+                print(f'{i}. Train loss:', loss.detach().cpu().numpy(), ' |  Val Loss:', loss_val.detach().cpu().numpy())
+                model.train()
+                
+                if val_loss_old < loss_val:
+                    cur_es += 1
+                else:
+                    cur_es = 0
+                val_loss_old = loss_val
+
+                if cur_es == patience:
+                    break
+
+
+    model.eval()
+    with torch.no_grad():
+        out = model(test_x).cpu()
+        
+    probs = torch.sigmoid(out).numpy()
+    roc_auc = roc_auc_score(test_y, probs)
+
+    return roc_auc
+
+def main(args):
+
+    roc_aucs = []
     for i in range(5):
         seed = i
-        print(seed)
         set_seed(seed)
         
-        (A, edge_index), X, (train_idx, train_y), (val_idx, val_y), (test_idx, test_y), names = tools.get_data(args, seed=seed)
+        _, X, (train_idx, train_y), (val_idx, val_y), (test_idx, test_y), names = tools.get_data(args.__dict__, seed=seed)
 
 
         if X is None or not X.shape[1]:
             raise ValueError('No features')
 
-        #degrees = A.sum(1).to(torch.float32).reshape((-1, 1))
-        #X = torch.cat([X, degrees], dim=1)
-        
-        in_feats = X.shape[1]
             
         train_x = X[train_idx].cuda()
         val_x = X[val_idx].cuda()
@@ -64,47 +115,43 @@ def main():
         print('train_x', train_x.mean())
         print('test_x', test_x.mean())
 
-        model = nn.Sequential(
-                    nn.Linear(in_feats, 64),
-                    nn.ReLU(),
-                    nn.Dropout(0.2),
-                    nn.Linear(64, 1))
-        optimizer = torch.optim.Adam(model.parameters())
+        roc_auc = run(train_x, train_y, test_x, test_y, val=(val_x, val_y))
 
-        lossf = Loss(train_y)
-        lossf_val = Loss(val_y)
-
-        model.train()
-        model.cuda()
-        for i in range(1000):
-            out = model(train_x)
-            loss = lossf(out)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            if (i % 20) == 0:
-                model.eval()
-                with torch.no_grad():
-                    loss_val = lossf_val(model(val_x))
-                print('Train loss:', loss.detach().cpu().numpy(), ' |  Val Loss:', loss_val.detach().cpu().numpy())
-                model.train()
-
-        model.eval()
-        with torch.no_grad():
-            out = model(test_x).cpu()
-        probs = torch.sigmoid(out).numpy()
-
-        roc_auc = roc_auc_score(test_y, probs)
         roc_aucs.append(roc_auc)
 
-        preds = (probs > 0.5) * 1
-        score = acc(preds, test_y)
-        scores.append(score)
 
-    print('Acc(all):', scores)
     print('Auc(all):', roc_aucs)
-    print('Accuracy:', np.mean(scores))
     print('Auc:', np.mean(roc_aucs))
 
+    return np.mean(roc_aucs), np.std(roc_aucs)
+
+def get_name(args):
+    if args.name:
+        return args.name
+
+    name = 'MLP'
+    if args.no_ppi:
+        name += '_NO-PPI'
+    if args.expression:
+        name += '_EXP'
+    if args.sublocs:
+        name += '_SUB'
+    if args.orthologs:
+        name += '_ORT'
+
+    return name
+
 if __name__ == '__main__':
-    main()
+    args = tools.get_args()
+
+    mean, std = main(args)
+
+    name = get_name(args)
+
+
+    df_path = 'results/results.csv'
+    df = pd.read_csv(df_path)
+
+    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+    df.to_csv(df_path, index=False)
+    print(df.head())

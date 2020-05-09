@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import torch
 from sklearn.model_selection import train_test_split as tts
+from sklearn.feature_selection import SelectKBest, chi2
 import torch.nn.functional as F
 
 from utils import *
@@ -73,6 +74,19 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def dim_reduction_cor(X, y, k=20):
+    cors = np.zeros((X.shape[1])) 
+
+    # calculate the correlation with y for each feature
+    for i in range(X.shape[1]):
+        cor = np.corrcoef(X[:, i], y)[0, 1]
+        if not np.isnan(cor):
+            cors[i] = cor
+
+    features = np.zeros_like(cors).astype(bool)
+    features[np.argsort(-cors)[:k]] = True
+
+    return features, cors
 
 def get_data(args, seed=0, parse=True, weights=False):
     # Getting the data ----------------------------------
@@ -121,28 +135,47 @@ def get_data(args, seed=0, parse=True, weights=False):
     nodes, counts = np.unique(edge_index, return_counts=True)
     degrees[nodes, 0] = counts
 
-    edge_index = torch.from_numpy(edge_index.T)
-    edge_index = edge_index.to(torch.long).contiguous()
 
     if X is None or not X.shape[1]:
         X = np.random.random((N, 50))
 
     X = np.concatenate([X, degrees.reshape((-1, 1))], 1)
-    X = torch.from_numpy(X).to(torch.float32)
     X = (X - X.mean(0, keepdims=True)) / (X.std(0, keepdims=True) + 1e-8)
         
     train, val = tts(train_ds, test_size=0.2, stratify=train_ds[:, 1], random_state=seed)
 
     train_idx = [mapping[t] for t in train[:, 0]]
-    train_y = torch.tensor(train[:, 1].astype(int), dtype=torch.float32)
-
     val_idx = [mapping[v] for v in val[:, 0]]
-    val_y = torch.tensor(val[:, 1].astype(int), dtype=torch.float32)
-
     test_idx = [mapping[v] for v in test_ds[:, 0]]
-    test_y = torch.tensor(test_ds[:, 1].astype(int), dtype=torch.float32)
-    # ---------------------------------------------------
 
+    # Feature selection -------------------------------------
+    k = 300
+    if args['organism'] == 'coli':
+        k = 30
+    elif args['organism'] == 'human':
+        k = 150
+    elif args['organism'] == 'yeast':
+        k = 120
+    elif args['organism'] == 'melanogaster':
+        k = 100
+
+    red_idx = np.concatenate([train_idx, test_idx, val_idx], 0)
+    red_y = np.concatenate([train[:, 1], test_ds[:, 1], val[:, 1]], 0)
+    red_X = (X - X.min(0)) / (X.max(0) - X.min(0))
+    feats, cors = dim_reduction_cor(red_X[red_idx], red_y.astype(np.float32), k=k)
+    X = X[:, feats]
+
+
+    # Torch -------------------------------------------------
+    edge_index = torch.from_numpy(edge_index.T)
+    edge_index = edge_index.to(torch.long).contiguous()
+
+    X = torch.from_numpy(X).to(torch.float32)
+    train_y = torch.tensor(train[:, 1].astype(int), dtype=torch.float32)
+    val_y = torch.tensor(val[:, 1].astype(int), dtype=torch.float32)
+    test_y = torch.tensor(test_ds[:, 1].astype(int), dtype=torch.float32)
+
+    # ---------------------------------------------------
     print(f'\nNumber of edges in graph: {len(edges)}')
     print(f'Number of features: {X.shape[1]}')
     print(f'Number of nodes in graph: {len(X)}\n')

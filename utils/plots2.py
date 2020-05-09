@@ -11,7 +11,7 @@ _methods = [['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP
 
 
 plt.style.use('ggplot')
-fig = plt.figure(figsize=(10, 4))
+fig = plt.figure(figsize=(10, 8))
 #fig.suptitle('AUC ROC Scores', fontsize=15)
 
 
@@ -29,7 +29,7 @@ ax.set_xlabel('Networks')
 ax.set_ylabel('ROC AUC', labelpad=15)
 
 for i, organism in enumerate(organisms):
-    ax = fig.add_subplot(1,3, i+1)
+    ax = fig.add_subplot(2,2, i+1)
     ax.set_title(organism.capitalize(), fontsize=13)
 
     methods = _methods[i]
@@ -51,8 +51,9 @@ for i, organism in enumerate(organisms):
             ax.plot(x_labels, y_values, label=method, linewidth=4)
             ax.fill_between(x_labels, y_values-std, y_values+std, alpha=0.2) #, edgecolor='#CC4F1B', facecolor='#FF9848')
 
-    ax.legend(loc='upper right')
+    ax.legend(loc='best')
 
-fig.subplots_adjust(top=0.85, bottom=0.12, left=0.07, right=1)
+fig.subplots_adjust(top=0.90, bottom=0.12, left=0.07, right=1, hspace=0.3)
 plt.suptitle('AUC ROC Scores')
 plt.savefig(f'plots/aucs.pdf')
+#plt.show()
