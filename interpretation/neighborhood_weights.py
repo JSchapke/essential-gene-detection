@@ -20,8 +20,8 @@ ROOT = '/home/schapke/projects/research/2020_FEB_JUN/src'
 weightsdir = os.path.join(ROOT, 'models/gat/weights') 
 snapshot_name = f'{organism}_{ppi}'
 snapshot_name += '_expression' if expression else ''
-snapshot_name += '_sublocs' if sublocs else ''
 snapshot_name += '_orthologs' if orthologs else ''
+snapshot_name += '_sublocs' if sublocs else ''
 savepath = os.path.join(weightsdir, snapshot_name)
 # ---------------------------------------------------------------
 
@@ -123,6 +123,16 @@ def main():
         # ---------------------------------------------------
 
         np.save(cache, [outs, att, edge_index, genes, train_idx, test_idx, val_idx, test_y, train_y, val_y])
+        
+        att = att.max(1).reshape((-1, 1))
+        meta_edges = pd.DataFrame(np.concatenate([edge_index.astype(int), att], 1))
+        meta_edges.to_csv(f'../data/essential_genes/gat_attention/{organism}_edges.csv', index=False)
+        
+        meta_nodes = pd.DataFrame(np.stack([np.arange(len(genes)), genes], 1))
+        meta_nodes.to_csv(f'../data/essential_genes/gat_attention/{organism}_nodes.csv', index=False)
+        print(meta_edges.shape, meta_nodes.shape)
+        print('Saved edges and nodes')
+    return
 
 
     G = nx.DiGraph()

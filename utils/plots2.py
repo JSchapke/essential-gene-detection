@@ -2,18 +2,18 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('results/results.csv')
+yeast_df = pd.read_csv('results/yeast_final.csv', header=None)
+coli_df = pd.read_csv('results/coli_final.csv', header=None)
+human_df = pd.read_csv('results/human_final.csv', header=None)
+fly_df = pd.read_csv('results/melanogaster_final.csv', header=None)
+print(fly_df.head())
 
-
-organisms = ['yeast', 'coli', 'human']
 ppi = ['biogrid', 'string', 'dip']
-_methods = [['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT']]
+methods = [['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT'], ['DC', 'LAC', 'NC', 'GAT_EXP_SUB_ORT']]
 
 
 plt.style.use('ggplot')
 fig = plt.figure(figsize=(10, 8))
-#fig.suptitle('AUC ROC Scores', fontsize=15)
-
 
 # Main Plot
 ax = fig.add_subplot(111)    # The big subplot
@@ -24,36 +24,50 @@ ax.spines['left'].set_color('none')
 ax.spines['right'].set_color('none')
 ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
 
-# Set common labels
-ax.set_xlabel('Networks')
-ax.set_ylabel('ROC AUC', labelpad=15)
-
-for i, organism in enumerate(organisms):
-    ax = fig.add_subplot(2,2, i+1)
-    ax.set_title(organism.capitalize(), fontsize=13)
-
-    methods = _methods[i]
+def plot(ax, df, methods):
     for method in methods:
-        rows = df[(df['Organism'] == organism) & df['PPI'].isin(ppi) & (df['Model Type'] == method)]
-        rows = rows.sort_values('PPI')
-        print(rows, method, organism, ppi)
+        rows = df[df[0] == method]
+        rows = rows.sort_values(2)
         rows = rows.iloc[[2,0,1]]
-        x_labels = rows['PPI'].values
+
+        x_labels = rows[2].values
         x_labels = [x.capitalize() for x in x_labels]
 
-        y_values = rows['Mean'].values
-        std = rows['Std Dev'].values
+        y_values = rows[7].values
+        std = rows[8].values
 
         if 'GAT' in method:
-            ax.plot(x_labels, y_values, label='GAT', linewidth=4, color='red')
+            ax.plot(x_labels, y_values, label='GAT', linewidth=6, color='red')
             ax.fill_between(x_labels, y_values-std, y_values+std, color='red', alpha=0.2) #, edgecolor='#CC4F1B', facecolor='#FF9848')
         else:
-            ax.plot(x_labels, y_values, label=method, linewidth=4)
+            ax.plot(x_labels, y_values, label=method, linewidth=6)
             ax.fill_between(x_labels, y_values-std, y_values+std, alpha=0.2) #, edgecolor='#CC4F1B', facecolor='#FF9848')
 
-    ax.legend(loc='best')
+        ax.legend(loc='best')
+        ax.set_ylim(top=1, bottom=0.5)
+
+
+# Set common labels
+ax.set_ylabel('ROC AUC', labelpad=15)
+
+ax = fig.add_subplot(221)
+ax.set_title('Yeast', fontsize=13)
+plot(ax, yeast_df, methods[0])
+
+ax = fig.add_subplot(222)
+ax.set_title('Coli', fontsize=13)
+plot(ax, coli_df, methods[1])
+
+ax = fig.add_subplot(223)
+ax.set_title('Human', fontsize=13)
+plot(ax, human_df, methods[2])
+
+ax = fig.add_subplot(224)
+ax.set_title('Fly', fontsize=13)
+plot(ax, fly_df, methods[3])
+
 
 fig.subplots_adjust(top=0.90, bottom=0.12, left=0.07, right=1, hspace=0.3)
-plt.suptitle('AUC ROC Scores')
-plt.savefig(f'plots/aucs.pdf')
-#plt.show()
+plt.suptitle('Benchmark on network based methods', fontsize=15)
+plt.savefig(f'plots/aucs2.pdf')
+plt.show()

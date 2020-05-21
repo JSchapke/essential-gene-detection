@@ -1,25 +1,15 @@
-import sys
+import sys; sys.path.append('.')
 import argparse
-import random
-from collections import deque
 
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from sklearn.model_selection import train_test_split as tts
-from sklearn.metrics import roc_auc_score, roc_curve
-from sklearn import metrics
-import sklearn.neural_network
-import networkx as nx
-sys.path.append('.')
-from utils import *
-from sklearn.feature_selection import SelectKBest, chi2, f_classif
-
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
+from sklearn.metrics import roc_auc_score
+
+from utils import *
 import tools
 
 class Loss():
@@ -39,7 +29,8 @@ class Loss():
 def acc(t1, t2):
     return np.sum(t1*1==t2*1) / len(t1)
 
-def run(train_x, train_y, test_x, test_y, val=None):
+
+def mlp_fit_predict(train_x, train_y, test_x, val=None):
     epochs = 1000
 
     in_feats = train_x.shape[1]
@@ -89,16 +80,13 @@ def run(train_x, train_y, test_x, test_y, val=None):
     model.eval()
     with torch.no_grad():
         out = model(test_x).cpu()
-        
     probs = torch.sigmoid(out).numpy()
-    roc_auc = roc_auc_score(test_y, probs)
-
-    return roc_auc
+    return probs
 
 def main(args):
 
     roc_aucs = []
-    for i in range(5):
+    for i in range(args.n_runs):
         seed = i
         set_seed(seed)
         
@@ -115,8 +103,8 @@ def main(args):
         print('train_x', train_x.mean())
         print('test_x', test_x.mean())
 
-        roc_auc = run(train_x, train_y, test_x, test_y, val=(val_x, val_y))
-
+        probs = mlp_fit_predict(train_x, train_y, test_x, val=(val_x, val_y))
+        roc_auc = roc_auc_score(test_y, probs)
         roc_aucs.append(roc_auc)
 
 

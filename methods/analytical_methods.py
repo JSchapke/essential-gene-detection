@@ -131,43 +131,34 @@ def test_auc(test, preds):
 def run(seed=0, save=True, update=True):
     # Getting the data ----------------------------------
     (edges, _), _, _, test, genes = utils.data(organism=args.organism, ppi=args.ppi, seed=seed)
-
-    print(edges)
     
     G = nx.Graph()
     G.add_edges_from(edges)
 
     test_X = test[:, 0]
 
-    path = f'results/{args.organism}/{args.ppi}/methods'
-    os.makedirs(path, exist_ok=True)
+    DC_results = DC(G, test_X)
+    DC_auc = test_auc(test, DC_results)
 
-    DC_PATH = os.path.join(path, 'DC.npy')
-    if not os.path.isfile(DC_PATH) or update:
-        DC_results = DC(G, test_X)
-        DC_auc = test_auc(test, DC_results)
-        print('DC score:', DC_auc)
-        if save:
-            np.save(DC_PATH, DC_results)
+    LAC_results = LAC(G, test_X)
+    LAC_auc = test_auc(test, LAC_results)
 
-    LAC_PATH = os.path.join(path, 'LAC.npy')
-    if not os.path.isfile(LAC_PATH) or update:
-        LAC_results = LAC(G, test_X)
-        LAC_auc = test_auc(test, LAC_results)
-        print('LAC score:', LAC_auc)
-        if save:
-            np.save(LAC_PATH, LAC_results)
-
-    NC_PATH = os.path.join(path, 'NC.npy')
-    if not os.path.isfile(NC_PATH) or update:
-        NC_results = NC(G, test_X)
-        NC_auc = test_auc(test, NC_results)
-        print('NC score:', NC_auc)
-        if save:
-            np.save(NC_PATH, NC_results)
+    NC_results = NC(G, test_X)
+    NC_auc = test_auc(test, NC_results)
 
     return DC_auc, LAC_auc, NC_auc
 
+
+def write_results(path, DC_aucs, LAC_aucs, NC_aucs):
+    if os.path.isfile(path):
+        df = pd.read_csv(path)
+    else:
+        df = pd.DataFrame(columns=['Model Type', 'Organism', 'PPI', 'Expression', 'Orthologs', 'Sublocalization', 'N Runs', 'Mean', 'Std Dev'])
+
+    df.loc[len(df)] = ['DC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(DC_aucs), np.std(DC_aucs)]
+    df.loc[len(df)] = ['LAC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(LAC_aucs), np.std(LAC_aucs)]
+    df.loc[len(df)] = ['NC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(NC_aucs), np.std(NC_aucs)]
+    df.to_csv(path, index=False)
 
 
 if __name__ == '__main__':
@@ -182,15 +173,5 @@ if __name__ == '__main__':
         NC_aucs.append(nc)
 
 
-    df_path = 'results/results.csv'
-    if os.path.isfile(df_path):
-        df = pd.read_csv(df_path)
-    else:
-        df = pd.DataFrame(columns=['Model Type', 'Organism', 'PPI', 'Expression', 'Orthologs', 'Sublocalization', 'N Runs', 'Mean', 'Std Dev'])
-
-
-    df.loc[len(df)] = ['DC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(DC_aucs), np.std(DC_aucs)]
-    df.loc[len(df)] = ['LAC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(LAC_aucs), np.std(LAC_aucs)]
-    df.loc[len(df)] = ['NC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(NC_aucs), np.std(NC_aucs)]
-    df.to_csv('results/results.csv', index=False)
-
+    path1 = 'results/results.csv'
+    write_results(path1, DC_aucs, LAC_aucs, NC_aucs)

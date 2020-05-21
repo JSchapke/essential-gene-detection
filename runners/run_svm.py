@@ -57,6 +57,12 @@ def get_name(args):
 
     return name
 
+def write(path):
+    df = pd.read_csv(path)
+    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+    df.to_csv(path, index=False)
+    print(df.head())
+
 if __name__ == '__main__':
     args = tools.get_args()
 
@@ -65,9 +71,7 @@ if __name__ == '__main__':
     name = get_name(args)
 
 
-    df_path = 'results/results.csv'
-    df = pd.read_csv(df_path)
-
-    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
-    df.to_csv(df_path, index=False)
-    print(df.head())
+    path1 = 'results/results.csv'
+    path2 = f'results/{args.organism}.csv'
+    write(path1)
+    write(path2)

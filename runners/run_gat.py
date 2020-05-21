@@ -14,11 +14,8 @@ from models.gat import params as gat_params
 from utils import *
 from runners import tools
 
-GAT_PARAMS  = gat_params.gat_small
-#GAT_PARAMS  = gat_params.gat_medium
-#GAT_PARAMS  = gat_params.gat_large
-#GAT_PARAMS  = gat_params.gat_huge
-
+GAT_P1  = gat_params.gat_0 
+GAT_P2  = gat_params.gat_fly
 DEVICE = torch.device('cuda')
 ROOT = '/home/schapke/projects/research/2020_FEB_JUN/src'
 
@@ -49,11 +46,10 @@ def optimize(X, A, train_y, train_idx, val_y, val_idx):
     val_auc = study.w
 
 
-def train(X, A, 
+def train(params, X, A, 
         edge_weights,
         train_y, train_idx, 
         val_y, val_idx, 
-        params=GAT_PARAMS, 
         return_score=False, 
         save_best_only=True,
         savepath='',
@@ -61,7 +57,7 @@ def train(X, A,
 
     epochs = 1000
 
-    model = GAT(in_feats=X.shape[1], **GAT_PARAMS)
+    model = GAT(in_feats=X.shape[1], **params)
     model.to(DEVICE)
     X = X.to(DEVICE)
     A = A.to(DEVICE)
@@ -101,7 +97,7 @@ def train(X, A,
     if savepath:
         save = {
             'auc': score,
-            'model_params': GAT_PARAMS,
+            'model_params': params,
             'model_state_dict': model.state_dict()
         }
         torch.save(save, savepath)
@@ -129,6 +125,30 @@ def test(model, X, A, test_ds=None):
     return probs
 
 
+def get_params(org):
+    if org == 'melanogaster':
+        return GAT_P2
+    else:
+        return GAT_P1
+
+
+def get_name(args):
+    if args.name:
+        return args.name
+
+    name = 'GAT'
+    if args.no_ppi:
+        name += '_NO-PPI'
+    if args.expression:
+        name += '_EXP'
+    if args.sublocs:
+        name += '_SUB'
+    if args.orthologs:
+        name += '_ORT'
+
+    return name
+
+
 def main(args, name='', seed=0, save=True):
     set_seed(seed)
 
@@ -141,7 +161,6 @@ def main(args, name='', seed=0, save=True):
     outdir = os.path.join(ROOT, f'results/{args.organism}/gat')
     savepath = os.path.join(weightsdir, snapshot_name)
 
-
     # Getting the data ----------------------------------
     (edge_index, edge_weights), X, (train_idx, train_y), \
             (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(args.__dict__, seed=0, weights=False)
@@ -152,7 +171,8 @@ def main(args, name='', seed=0, save=True):
     # Train the model -----------------------------------
     if args.train: 
         print('\nTraining the model')
-        model = train(X, edge_index, edge_weights, train_y, train_idx, val_y, val_idx, savepath=savepath)
+        gat_params = get_params(args.organism)
+        model = train(gat_params, X, edge_index, edge_weights, train_y, train_idx, val_y, val_idx, savepath=savepath)
     # ---------------------------------------------------
 
 
@@ -174,22 +194,6 @@ def main(args, name='', seed=0, save=True):
     return auc
 
 
-def get_name(args):
-    if args.name:
-        return args.name
-
-    name = 'GAT'
-    if args.no_ppi:
-        name += '_NO-PPI'
-    if args.expression:
-        name += '_EXP'
-    if args.sublocs:
-        name += '_SUB'
-    if args.orthologs:
-        name += '_ORT'
-
-    return name
-
 if __name__ == '__main__':
     args = tools.get_args()
 
@@ -208,12 +212,26 @@ if __name__ == '__main__':
         std = np.std(scores)
 
         df_path = 'results/results.csv'
-        df = pd.read_csv(df_path)
-
+        try:
+            df = pd.read_csv(df_path)
+        except:
+            df = pd.DataFrame([], columns=['Model Type','Organism','PPI','Expression','Orthologs','Sublocalization','N Runs','Mean','Std Dev'])
         df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
         df.to_csv(df_path, index=False)
+
+        df_path = f'results/{args.organism}.csv'
+        try:
+            df = pd.read_csv(df_path)
+        except:
+            df = pd.DataFrame([], columns=['name', 'ppi', 'expression', 'orthologs', 'sublocs', 'n_runs', 'mean', 'std'])
+        df.loc[len(df)] = [name, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+        df.to_csv(df_path, index=False)
+
+
         print('Final Result:', mean)
         print(df.tail())
+
+
 
     else:
         main(args, name=name, seed=0)

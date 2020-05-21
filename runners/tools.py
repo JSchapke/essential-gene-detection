@@ -7,7 +7,6 @@ from sklearn.feature_selection import SelectKBest, chi2
 import torch.nn.functional as F
 
 from utils import *
-
 class Loss():
     def __init__(self, y, idx):
         self.y = y
@@ -54,7 +53,7 @@ class WeightAveraging:
             for old, new in zip(params, weights):
                 old.data = new
 
-def get_args():
+def get_args(parse=True):
     # Args ----------------------------------------------------------
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', action='store_true')
@@ -71,6 +70,10 @@ def get_args():
     parser.add_argument('--name', default='', help="Name for the results csv")
     parser.add_argument('--weightsdir', default='', help="Directory for the model's weights")
     parser.add_argument('--outdir', default='')
+
+    if not parse:
+        return parser
+
     args = parser.parse_args()
     return args
 
@@ -151,7 +154,7 @@ def get_data(args, seed=0, parse=True, weights=False):
     # Feature selection -------------------------------------
     k = 300
     if args['organism'] == 'coli':
-        k = 30
+        k = 50
     elif args['organism'] == 'human':
         k = 150
     elif args['organism'] == 'yeast':
