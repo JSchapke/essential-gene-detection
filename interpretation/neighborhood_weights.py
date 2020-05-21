@@ -8,16 +8,16 @@ import torch
 import matplotlib.pyplot as plt
 from models.gat.gat_pytorch import GAT
 from runners.tools import get_data
+from torch_geometric.utils import remove_isolated_nodes, remove_self_loops
 
 # Args ----------------------------------------------------------
-organism = 'human'
+organism = 'melanogaster'
 ppi = 'string'
 expression = True
 sublocs = False
 orthologs = False
 
-ROOT = '/home/schapke/projects/research/2020_FEB_JUN/src'
-weightsdir = os.path.join(ROOT, 'models/gat/weights') 
+weightsdir = os.path.join(ROOT, './models/gat/weights') 
 snapshot_name = f'{organism}_{ppi}'
 snapshot_name += '_expression' if expression else ''
 snapshot_name += '_orthologs' if orthologs else ''
@@ -77,10 +77,35 @@ def single_node():
 def multi_node():
     pass
 
+def save_attention(edge_index, att, labels, genes):
+    # ------------------- Saving attention network ----------------------------------- #    
+    att = att.max(1).reshape((-1, 1))
+    print(edge_index.shape, labels.shape, att.shape)
+    t = lambda t: torch.tensor(t)
+    edge_index, att = remove_self_loops(t(edge_index.T), t(att))
+    edge_index, att, _ = remove_isolated_nodes(edge_index, att)
+    edge_index = edge_index.numpy().T
+    att = att.numpy()
+    print(edge_index.shape, labels.shape, att.shape)
+    nodes_edges = np.unique(edge_index.reshape((-1)))
+    nodes_idx = np.intersect1d(np.arange(len(labels)), nodes_edges)
+
+    labels = labels[nodes_idx]
+    genes = genes[nodes_idx]
+
+    meta_edges = pd.DataFrame(np.concatenate([edge_index.astype(int), att], 1))
+    meta_edges.to_csv(f'../data/essential_genes/gat_attention/{organism}_edges.csv', index=False)
+    
+    meta_nodes = pd.DataFrame(np.stack([nodes_idx, genes, labels], 1))
+    meta_nodes.to_csv(f'../data/essential_genes/gat_attention/{organism}_nodes.csv', index=False)
+    print(meta_edges.shape, meta_nodes.shape)
+    print('Saved edges and nodes')
+    # -------------------------------------------------------------------------------- #    
+
 
 def main():
 
-    update = True
+    update = False
     cache = '.cache/int_cache.npy'
     os.makedirs('./cache', exist_ok=True)
 
@@ -123,15 +148,15 @@ def main():
         # ---------------------------------------------------
 
         np.save(cache, [outs, att, edge_index, genes, train_idx, test_idx, val_idx, test_y, train_y, val_y])
-        
-        att = att.max(1).reshape((-1, 1))
-        meta_edges = pd.DataFrame(np.concatenate([edge_index.astype(int), att], 1))
-        meta_edges.to_csv(f'../data/essential_genes/gat_attention/{organism}_edges.csv', index=False)
-        
-        meta_nodes = pd.DataFrame(np.stack([np.arange(len(genes)), genes], 1))
-        meta_nodes.to_csv(f'../data/essential_genes/gat_attention/{organism}_nodes.csv', index=False)
-        print(meta_edges.shape, meta_nodes.shape)
-        print('Saved edges and nodes')
+
+    labels = np.zeros(edge_index.max()) -1
+    labels[train_idx][train_y == 0] = 0
+    labels[train_idx][train_y == 1] = 1
+    labels[test_idx][test_y == 0] = 2
+    labels[test_idx][test_y == 1] = 3
+    labels[val_idx][val_y == 0] = 4
+    labels[val_idx][val_y == 1] = 5
+    save_attention(edge_index, att, labels, genes)
     return
 
 

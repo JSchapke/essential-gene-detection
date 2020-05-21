@@ -10,7 +10,7 @@ import scipy.sparse as sparse
 from os.path import join
 import pickle
 from tqdm import tqdm
-DATA_ROOT = '/home/schapke/projects/research/2020_FEB_JUN/data'
+DATA_ROOT = '../data'
 
 
 def evalAUC(model, X, A, y, mask, logits=None):
@@ -57,6 +57,9 @@ def dim_reduction_cor(X, y, k=20):
 
     return features, cors
 
+def filter_labels(labels, genes):
+    mask = np.isin(labels[:, 0], genes)
+    return labels[mask]
 
 def data(
     organism='yeast',
@@ -76,7 +79,7 @@ def data(
     print(f'PPI: {ppi}.')
 
     # Cache ----------
-    update = False
+    update = True
     cache = f'.cache/{organism}/'
     cachepath = cache + f'{expression}_{sublocalizations}_{orthologs}_{ppi}.pkl'
     os.makedirs(cache, exist_ok=True)
@@ -107,17 +110,22 @@ def data(
 
         edges = edges.dropna()
         index, edges = edges.index, edges.values
-        genes = np.union1d(edges[:, 0], edges[:, 1])
+        ppi_genes = np.union1d(edges[:, 0], edges[:, 1])
         if edge_weights is not None: 
             edge_weights = edge_weights.iloc[index.values].values
 
         path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/EssentialGenes/ogee.csv')
         labels = pd.read_csv(path).values
-        print('Number of Labels / Number of label genes in network:', len(labels), '/', len(np.intersect1d(genes, labels[:, 0])))
-        genes = np.union1d(labels[:, 0], genes)
+
+        # filter labels not in the PPI network
+        print('Number of labels before filtering:', len(labels))
+        labels = filter_labels(labels, ppi_genes)
+        print('Number of labels after filtering:', len(labels))
+
+        genes = np.union1d(labels[:, 0], ppi_genes)
+        print('Number of label genes in network:', len(genes))
 
         X = np.zeros((len(genes), 0))
-
 
         if orthologs:
             path = os.path.join(DATA_ROOT, f'essential_genes/{organism}/Orthologs/orthologs.csv')
