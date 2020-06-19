@@ -17,7 +17,7 @@ expression = True
 sublocs = False
 orthologs = False
 
-weightsdir = os.path.join(ROOT, './models/gat/weights') 
+weightsdir = './models/gat/weights'
 snapshot_name = f'{organism}_{ppi}'
 snapshot_name += '_expression' if expression else ''
 snapshot_name += '_orthologs' if orthologs else ''
@@ -97,15 +97,16 @@ def save_attention(edge_index, att, labels, genes):
     meta_edges.to_csv(f'../data/essential_genes/gat_attention/{organism}_edges.csv', index=False)
     
     meta_nodes = pd.DataFrame(np.stack([nodes_idx, genes, labels], 1))
-    meta_nodes.to_csv(f'../data/essential_genes/gat_attention/{organism}_nodes.csv', index=False)
+    path = f'../data/essential_genes/gat_attention/{organism}_nodes.csv'
+    meta_nodes.to_csv(path, index=False)
     print(meta_edges.shape, meta_nodes.shape)
-    print('Saved edges and nodes')
+    print('Saved edges and nodes to ', path)
     # -------------------------------------------------------------------------------- #    
 
 
 def main():
 
-    update = False
+    update = True
     cache = '.cache/int_cache.npy'
     os.makedirs('./cache', exist_ok=True)
 
@@ -150,12 +151,9 @@ def main():
         np.save(cache, [outs, att, edge_index, genes, train_idx, test_idx, val_idx, test_y, train_y, val_y])
 
     labels = np.zeros(edge_index.max()) -1
-    labels[train_idx][train_y == 0] = 0
-    labels[train_idx][train_y == 1] = 1
-    labels[test_idx][test_y == 0] = 2
-    labels[test_idx][test_y == 1] = 3
-    labels[val_idx][val_y == 0] = 4
-    labels[val_idx][val_y == 1] = 5
+    labels[train_idx] = train_y
+    labels[test_idx] = test_y + 2
+    labels[val_idx] = val_y + 4
     save_attention(edge_index, att, labels, genes)
     return
 

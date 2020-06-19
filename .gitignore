@@ -8,3 +8,5 @@ plots
 results
 models/gat/weights
 .gitignore
+weights/
+models/gat/weights/

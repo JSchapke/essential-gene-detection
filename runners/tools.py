@@ -55,21 +55,21 @@ class WeightAveraging:
 
 def get_args(parse=True):
     # Args ----------------------------------------------------------
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--train', action='store_true')
-    parser.add_argument('--optimize', action='store_true')
-    parser.add_argument('--n_runs', type=int, default=0)
-    parser.add_argument('--organism', default='yeast')
-    parser.add_argument('--ppi', default='biogrid')
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--train', action='store_true', help='Train the model (else will search for saved checkpoints)')
+    parser.add_argument('--optimize', action='store_true', help='Hyperparamters search')
+    parser.add_argument('--n_runs', type=int, default=0, help='How many runs to perform for consistency')
+    parser.add_argument('--organism', default='yeast', help='Organism. ["yeast", "coli", "melanogaster", "human"]')
+    parser.add_argument('--ppi', default='biogrid', help='PPI Network. ["biogird", "string", "dip"]')
     parser.add_argument('--string_thr', default=500, type=int, help='Connection threshold for STRING PPI database')
-    parser.add_argument('--expression', action='store_true')
-    parser.add_argument('--orthologs', action='store_true')
-    parser.add_argument('--sublocs', action='store_true')
+    parser.add_argument('--expression', action='store_true', help='Wheter to use expression data')
+    parser.add_argument('--orthologs', action='store_true', help='Wheter to use orthology data')
+    parser.add_argument('--sublocs', action='store_true', help='Wheter to use subcelulr localization data')
     parser.add_argument('--no_ppi', action='store_true', help='Run GNN without the interaction network')
     parser.add_argument('--use_weights', action='store_true', help='Wether to use StringDB weights for connections')
     parser.add_argument('--name', default='', help="Name for the results csv")
     parser.add_argument('--weightsdir', default='', help="Directory for the model's weights")
-    parser.add_argument('--outdir', default='')
+    parser.add_argument('--outdir', default='', help='Output directory')
 
     if not parse:
         return parser
@@ -141,6 +141,9 @@ def get_data(args, seed=0, parse=True, weights=False):
 
     if X is None or not X.shape[1]:
         X = np.random.random((N, 50))
+
+    if X.shape[1] < 50:
+        X = np.concatenate([X, np.random.random((N, 50))], axis=1)
 
     X = np.concatenate([X, degrees.reshape((-1, 1))], 1)
     X = (X - X.mean(0, keepdims=True)) / (X.std(0, keepdims=True) + 1e-8)

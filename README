@@ -1,0 +1,10 @@
+
+To train GAT in a dataset run:
+    python runners/run_gat.py <OPTIONS>
+
+To see which options are available:
+    python runners/run_gat.py --help
+
+Example:
+    python runners/run_gat.py --train --organism human --ppi string --sublocs --expression
+This will train and evaluate on the human genome dataset with additional data of gene expression profiles and subcellular localizations information.

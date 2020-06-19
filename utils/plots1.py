@@ -32,18 +32,21 @@ ax.set_ylabel('ROC AUC', labelpad=15)
 
 
 def plot(ax, df, methods):
+    print(df.head())
     width = 0.6
     labels = ['GAT', 'MLP', 'SVM']
 
     x = np.arange(len(labels))
     means = np.ones(len(labels))
+    stds = np.ones(len(labels))
     for i, method in enumerate(methods):
         mask = (df[0] == method) & (df[2] == 'string')
+        print(df[mask][7])
         means[i] = df[mask][7]
+        stds[i] = df[mask][8]
 
     colors = [c['color'] for c in list(plt.rcParams['axes.prop_cycle'])]
-    print(colors)
-    rects1 = ax.bar(x, means, width, color=colors[:len(labels)])
+    rects1 = ax.bar(x, means, width, yerr=stds, align='center', color=colors[:len(labels)], capsize=5)
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylim(top=1, bottom=0.5)

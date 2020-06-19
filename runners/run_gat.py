@@ -16,8 +16,8 @@ from runners import tools
 
 GAT_P1  = gat_params.gat_0 
 GAT_P2  = gat_params.gat_fly
-DEVICE = torch.device('cuda')
-ROOT = '/home/schapke/projects/research/2020_FEB_JUN/src'
+GAT_P3  = gat_params.gat_yeast
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def optimize(X, A, train_y, train_idx, val_y, val_idx):
@@ -53,7 +53,7 @@ def train(params, X, A,
         return_score=False, 
         save_best_only=True,
         savepath='',
-         ):
+ ):
 
     epochs = 1000
 
@@ -128,6 +128,8 @@ def test(model, X, A, test_ds=None):
 def get_params(org):
     if org == 'melanogaster':
         return GAT_P2
+    elif org == 'yeast':
+        return GAT_P3
     else:
         return GAT_P1
 
@@ -157,8 +159,8 @@ def main(args, name='', seed=0, save=True):
         if args.__dict__[p]:
             snapshot_name += f'_{p}'
 
-    weightsdir = os.path.join(ROOT, 'models/gat/weights') 
-    outdir = os.path.join(ROOT, f'results/{args.organism}/gat')
+    weightsdir = './models/gat/weights'
+    outdir = './results/{args.organism}/gat'
     savepath = os.path.join(weightsdir, snapshot_name)
 
     # Getting the data ----------------------------------
