@@ -1,4 +1,6 @@
-import sys; sys.path.append('.')
+import os
+import sys
+sys.path.append('.')
 import argparse
 
 import pandas as pd
@@ -12,6 +14,7 @@ from sklearn.metrics import roc_auc_score
 from utils import *
 import tools
 
+
 class Loss():
     def __init__(self, y):
         self.y = y
@@ -19,26 +22,29 @@ class Loss():
         self.neg_mask = y == 0
 
     def __call__(self, out):
-        pos_mask = self.pos_mask 
-        neg_mask = self.neg_mask 
-        loss_p = F.binary_cross_entropy_with_logits(out[pos_mask].squeeze(), self.y[self.pos_mask].cuda())
-        loss_n = F.binary_cross_entropy_with_logits(out[neg_mask].squeeze(), self.y[neg_mask].cuda())
+        pos_mask = self.pos_mask
+        neg_mask = self.neg_mask
+        loss_p = F.binary_cross_entropy_with_logits(
+            out[pos_mask].squeeze(), self.y[self.pos_mask].cuda())
+        loss_n = F.binary_cross_entropy_with_logits(
+            out[neg_mask].squeeze(), self.y[neg_mask].cuda())
         loss = loss_p + loss_n
         return loss
 
+
 def acc(t1, t2):
-    return np.sum(t1*1==t2*1) / len(t1)
+    return np.sum(t1*1 == t2*1) / len(t1)
 
 
-def mlp_fit_predict(train_x, train_y, test_x, val=None):
+def mlp_fit_predict(train_x, train_y, test_x, val=None, return_val_probs=False):
     epochs = 1000
 
     in_feats = train_x.shape[1]
     model = nn.Sequential(
-                nn.Linear(in_feats, 32),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(32, 1))
+        nn.Linear(in_feats, 32),
+        nn.ReLU(),
+        nn.Dropout(0.2),
+        nn.Linear(32, 1))
     optimizer = torch.optim.Adam(model.parameters())
 
     lossf = Loss(train_y)
@@ -66,7 +72,7 @@ def mlp_fit_predict(train_x, train_y, test_x, val=None):
                     loss_val = lossf_val(model(val_x))
                 print(f'{i}. Train loss:', loss.detach().cpu().numpy(), ' |  Val Loss:', loss_val.detach().cpu().numpy())
                 model.train()
-                
+
                 if val_loss_old < loss_val:
                     cur_es += 1
                 else:
@@ -76,27 +82,33 @@ def mlp_fit_predict(train_x, train_y, test_x, val=None):
                 if cur_es == patience:
                     break
 
-
     model.eval()
     with torch.no_grad():
         out = model(test_x).cpu()
     probs = torch.sigmoid(out).numpy()
+
+    if return_val_probs:
+        with torch.no_grad():
+            out = model(val_x).cpu()
+        val_probs = torch.sigmoid(out).numpy()
+
+        return probs, val_probs
+
     return probs
 
-def main(args):
 
+def main(args):
     roc_aucs = []
     for i in range(args.n_runs):
         seed = i
-        set_seed(seed)
-        
-        _, X, (train_idx, train_y), (val_idx, val_y), (test_idx, test_y), names = tools.get_data(args.__dict__, seed=seed)
+        # set_seed(seed)
 
+        _, X, (train_idx, train_y), (val_idx, val_y), (test_idx,
+                                                       test_y), names = tools.get_data(args.__dict__, seed=seed)
 
         if X is None or not X.shape[1]:
             raise ValueError('No features')
 
-            
         train_x = X[train_idx].cuda()
         val_x = X[val_idx].cuda()
         test_x = X[test_idx].cuda()
@@ -107,11 +119,24 @@ def main(args):
         roc_auc = roc_auc_score(test_y, probs)
         roc_aucs.append(roc_auc)
 
+        p = np.concatenate(
+            [names[test_idx].reshape(-1, 1), probs.reshape(-1, 1)], axis=1)
+        save_preds(p, args)
 
     print('Auc(all):', roc_aucs)
     print('Auc:', np.mean(roc_aucs))
 
     return np.mean(roc_aucs), np.std(roc_aucs)
+
+
+def save_preds(preds, args):
+    name = get_name(args) + f'_{args.organism}_{args.ppi}.csv'
+    name = name.lower()
+    path = os.path.join('preds', name)
+    df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
+    df.to_csv(path)
+    print('Saved the predictions to:', path)
+
 
 def get_name(args):
     if args.name:
@@ -129,6 +154,7 @@ def get_name(args):
 
     return name
 
+
 if __name__ == '__main__':
     args = tools.get_args()
 
@@ -136,10 +162,10 @@ if __name__ == '__main__':
 
     name = get_name(args)
 
-
     df_path = 'results/results.csv'
     df = pd.read_csv(df_path)
 
-    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,
+                       args.orthologs, args.sublocs, args.n_runs, mean, std]
     df.to_csv(df_path, index=False)
     print(df.head())

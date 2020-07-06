@@ -1,45 +1,44 @@
-import sys; sys.path.append('.')
+import sys
+sys.path.append('.')
 import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score, roc_curve
 import sklearn
 import sklearn.svm
-from utils import *
+from utils.utils import *
 
 import tools
 
+
 def acc(t1, t2):
-    return np.sum(1.0*(t1==t2)) / len(t1)
+    return np.sum(1.0*(t1 == t2)) / len(t1)
+
 
 def main(args):
-    scores, roc_aucs = [], []
-    for i in range(5):
+    roc_aucs = []
+    for i in range(args.n_runs):
         seed = i
         set_seed(seed)
-        
-        (_, _), X, (train_idx, train_y), (val_idx, val_y), (test_idx, test_y), names = tools.get_data(args.__dict__, seed=seed)
+
+        (_, _), X, (train_idx, train_y), (val_idx, val_y), (test_idx,
+                                                            test_y), names = tools.get_data(args.__dict__, seed=seed)
         if X is None or not X.shape[1]:
             raise ValueError('No features')
 
-        
-        clf = sklearn.svm.SVC(class_weight='balanced', random_state=seed)
+        clf = sklearn.svm.SVC(class_weight='balanced', random_state=seed, probability=True)
         clf.fit(X[train_idx], train_y)
-        probs = clf.predict(X[test_idx])
-
+        probs = clf.predict_proba(X[test_idx])[:, 1]
         roc_auc = roc_auc_score(test_y, probs)
         roc_aucs.append(roc_auc)
 
-        preds = (probs > 0.5) * 1
-        score = acc(preds, test_y)
-        print('Score:', score)
-        scores.append(score)
+        p = np.stack([names[test_idx], probs], axis=1)
+        save_preds(p, args)
 
-    print('Acc(all):', scores)
     print('Auc(all):', roc_aucs)
-    print('Accuracy:', np.mean(scores))
     print('Auc:', np.mean(roc_aucs))
 
     return np.mean(roc_aucs), np.std(roc_aucs)
+
 
 def get_name(args):
     if args.name:
@@ -57,11 +56,23 @@ def get_name(args):
 
     return name
 
+
+def save_preds(preds, args):
+    name = get_name(args) + f'_{args.organism}_{args.ppi}.csv'
+    name = name.lower()
+    path = os.path.join('preds', name)
+    df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
+    df.to_csv(path)
+    print('Saved the predictions to:', path)
+
+
 def write(path):
     df = pd.read_csv(path)
-    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,
+                       args.orthologs, args.sublocs, args.n_runs, mean, std]
     df.to_csv(path, index=False)
     print(df.head())
+
 
 if __name__ == '__main__':
     args = tools.get_args()
@@ -69,7 +80,6 @@ if __name__ == '__main__':
     mean, std = main(args)
 
     name = get_name(args)
-
 
     path1 = 'results/results.csv'
     path2 = f'results/{args.organism}.csv'

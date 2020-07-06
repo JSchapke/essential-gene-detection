@@ -1,154 +1,140 @@
-import sys; sys.path.append('.')
+import os
+import sys
+sys.path.append('.')
 
 from sklearn.metrics import roc_auc_score
 from torch_geometric.nn.models import Node2Vec
 from sklearn.svm import SVC
-
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
 from runners.run_mlp import mlp_fit_predict
-from utils import *
-import tools
+from utils.utils import *
+from runners import tools
 
-#PARAMS = { 
-#        'embedding_dim': 32,
-#        'walk_length': 64,
-#        'context_size': 64,
-#        'walks_per_node': 2 } 
-PARAMS = { 
-        'embedding_dim': 64,
-        'walk_length': 8,
-        'context_size': 8,
-        'walks_per_node': 2 } 
+PARAMS = {
+    'embedding_dim': 128,
+    'walk_length': 64,
+    'context_size': 64,
+    'walks_per_node': 64,
+    'num_negative_samples': 1,
+}
 LR = 1e-2
 WEIGHT_DECAY = 5e-4
-EPOCHS=100
+EPOCHS = 100
+DEV = torch.device('cuda')
+
+EPOCHS = 20
 
 
-class Model:
-    def __init__(self, head_type='svm'):
-        self.head_type = head_type
+def train_epoch(n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, val_mask, test_mask):
+    print('Two-Step model train epoch')
 
-    def train_n2v(self, edge_index):
-        num_nodes = len(np.unique(edge_index.reshape((-1))))
-        train_nodes = torch.arange(0, int(num_nodes * 0.8)).to(torch.long)
-        train_nodes = torch.arange(0, num_nodes).to(torch.long)
-        val_nodes = torch.arange(int(num_nodes * 0.8), num_nodes).to(torch.long)
+    X = X.to(DEV)
+    train_y = train_y.to(DEV)
+    val_y = val_y.to(DEV)
+    Z = None
 
-        model = Node2Vec(num_nodes, **PARAMS)
-        model.train()
-        optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+    n2v.train()
+    for i in range(EPOCHS):
+        n2v_train_loss = 0
+        for pos_rw, neg_rw in n2v_loader:
+            n2v_optimizer.zero_grad()
+            loss = n2v.loss(pos_rw.to(DEV), neg_rw.to(DEV))
+            loss.backward()
+            n2v_optimizer.step()
+            n2v_train_loss += loss.data.item()
+        print(f'N2V Train_Loss:', n2v_train_loss)
+    print('')
+    n2v.eval()
+    Z = n2v().detach()
 
-        patience, best_loss = 10, np.Inf
-        steps = 0
+    if X is None:
+        train_x = Z[train_mask]
+        val_x = Z[val_mask]
+        test_x = Z[test_mask]
+    elif Z is not None:
+        train_x = torch.cat([Z[train_mask], X[train_mask]], dim=1)
+        val_x = torch.cat([Z[val_mask], X[val_mask]], dim=1)
+        test_x = torch.cat([Z[test_mask], X[test_mask]], dim=1)
+    else:
+        train_x = X[train_mask]
+        val_x = X[val_mask]
+        test_x = X[test_mask]
+    print('train_X.shape', train_x.shape)
 
-        for i in range(EPOCHS):
-            train_loss = model.loss(edge_index, train_nodes)
+    probs, val_probs = mlp_fit_predict(
+        train_x, train_y, test_x, val=(val_x, val_y), return_val_probs=True)
+    val_roc_auc = roc_auc_score(val_y.cpu().numpy(), val_probs)
 
-            optimizer.zero_grad()
-            train_loss.backward()
-            optimizer.step()
-
-            with torch.no_grad():
-                val_loss = model.loss(edge_index, val_nodes)
-            print(f'{i}. Train loss:', train_loss.detach().cpu().numpy(),
-                   ' |  Val Loss:', val_loss.detach().cpu().numpy(), end='\r')
-
-            if val_loss < best_loss:
-                best_loss = val_loss
-                steps = 0
-            else:
-                steps += 1
-                if steps == patience:
-                    break
-        print('')
-
-        self.embedding = model.embedding.weight.detach().cuda()
-        print('self.embedding.shape', self.embedding.shape)
-
-
-    def svm_fit_predict(self, X, y, test_x):
-        svm = SVC(class_weight='balanced', random_state=0)
-        svm.fit(X, y)
-        return svm.predict(test_x)
+    print('Validation ROC_AUC:', val_roc_auc)
+    return probs, val_roc_auc
 
 
-    def fit_predict(self, edge_index, X, y, idx, test_x, test_idx):
-        print(self.head_type)
-        self.train_n2v(edge_index)
+def fit_predict(edge_index, X, train_y, train_mask, val_y, val_mask, test_mask):
+    print('Training Node2Vec')
 
-        embedding = self.embedding
-        print('Embedding.shape:', embedding.shape)
+    n2v = Node2Vec(edge_index, **PARAMS).to(DEV)
+    n2v_loader = n2v.loader(batch_size=128, shuffle=True, num_workers=4)
+    n2v_optimizer = optim.Adam(n2v.parameters(), lr=LR)
 
-        train_embedding = embedding[idx]
-        test_embedding = embedding[test_idx]
+    patience, cur = 10, 0
+    best_auc = 0
+    _probs = None
 
-        #X = torch.cat([train_embedding, X], dim=1)
-        #test_x = torch.cat([test_embedding, test_x], dim=1)
-        X = train_embedding
-        test_x = test_embedding
-        print('X.shape:', X.shape)
-        print('test_x.shape:', test_x.shape)
+    for i in range(EPOCHS):
+        probs, val_roc_auc = train_epoch(
+            n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, val_mask, test_mask)
 
-        if self.head_type == 'svm':
-            X = X.cpu().numpy()
-            y = y.cpu().numpy()
-            test_x = test_x.cpu().numpy()
-            return self.svm_fit_predict(X, y, test_x)
-        elif self.head_type == 'mlp':
-            return mlp_fit_predict(X, y, test_x)
+        cur += 1
+        if val_roc_auc > best_auc:
+            cur = 0
+            best_auc = val_roc_auc
+            _probs = probs
+        if cur == patience:
+            break
+        print(f'Epoch {i}. Best Auc: {best_auc}')
 
-
-
-
-def run(head_type, x, y, idx, test_x, test_y, test_idx, edge_index):
-    model = Model(head_type)
-    probs = model.fit_predict(edge_index, x, y, idx, test_x, test_idx)
-    print(probs)
-    roc_auc = roc_auc_score(test_y, probs)
-    print('Roc auc:', roc_auc)
-    return roc_auc
+    return _probs
 
 
 def main(args):
-
     roc_aucs = []
     for i in range(args.n_runs):
         seed = i
         set_seed(seed)
-        
-        (edge_index, _), X, (train_idx, train_y), (val_idx, val_y), (test_idx, test_y), names = tools.get_data(args.__dict__, seed=seed)
+
+        (edge_index, _), X, (train_idx, train_y), (val_idx, val_y), (test_idx,
+                                                                     test_y), names = tools.get_data(args.__dict__, seed=seed)
 
         if X is None or not X.shape[1]:
             raise ValueError('No features')
-            
-        train_idx = train_idx + val_idx
-        train_x = X[train_idx].cuda()
-        train_y = train_y.tolist() + val_y.tolist()
-        train_y = torch.tensor(train_y).cuda()
-        test_x = X[test_idx].cuda()
 
-        print(len(np.unique(edge_index.reshape((-1)))))
-        print(len(train_idx), len(test_x))
+        probs = fit_predict(edge_index, X, train_y,
+                            train_idx, val_y, val_idx, test_idx)
+        auc = roc_auc_score(test_y.cpu().numpy(), probs)
+        roc_aucs.append(auc)
+        print('Final AUC:', auc)
 
-        roc_auc = run(args.head_type, train_x, train_y, train_idx, test_x, test_y, test_idx, edge_index)
-
-        roc_aucs.append(roc_auc)
-
+        test_genes = names[test_idx].reshape(-1, 1)
+        test_y = test_y.reshape(-1, 1)
+        preds = np.concatenate([probs, test_genes, test_y], axis=1)
+        save_preds(preds, args)
 
     print('Auc(all):', roc_aucs)
     print('Auc:', np.mean(roc_aucs))
-
     return np.mean(roc_aucs), np.std(roc_aucs)
+
 
 def get_name(args):
     if args.name:
         return args.name
 
-    name = 'N2V_' + args.head_type.upper()
+    name = 'N2V' 
     if args.no_ppi:
         name += '_NO-PPI'
     if args.expression:
@@ -161,22 +147,30 @@ def get_name(args):
     return name
 
 
+def save_preds(preds, args):
+    name = get_name(args) + f'_{args.organism}_{args.ppi}.csv'
+    name = name.lower()
+    path = os.path.join('preds', name)
+    df = pd.DataFrame(preds, columns=['Gene', 'Pred', 'Label'])
+    df.to_csv(path)
+    print('Saved the predictions to:', path)
+
 if __name__ == '__main__':
     parser = tools.get_args(parse=False)
-    parser.add_argument('--head_type', default='svm', help='Head for the two step model ["svm", "mlp"]')
+    parser.add_argument('--head_type', default='svm',
+                        help='Head for the two step model ["svm", "mlp"]')
     args = parser.parse_args()
-
-    print('Head:', args.head_type)
+    print(args)
 
     mean, std = main(args)
+    print(mean, std)
 
     name = get_name(args)
-
 
     df_path = 'results/results.csv'
     df = pd.read_csv(df_path)
 
-    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+    df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,
+                       args.orthologs, args.sublocs, args.n_runs, mean, std]
     df.to_csv(df_path, index=False)
-    print(df.tail())
-
+    # print(df.tail())

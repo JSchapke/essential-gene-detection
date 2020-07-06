@@ -1,5 +1,6 @@
 import os
-import sys; sys.path.append('.')
+import sys
+sys.path.append('.')
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -11,12 +12,12 @@ import torch.nn as nn
 import torch.optim as optim
 from models.gat.gat_pytorch import GAT
 from models.gat import params as gat_params
-from utils import *
+from utils.utils import *
 from runners import tools
 
-GAT_P1  = gat_params.gat_0 
-GAT_P2  = gat_params.gat_fly
-GAT_P3  = gat_params.gat_yeast
+GAT_P1 = gat_params.gat_0
+GAT_P2 = gat_params.gat_fly
+GAT_P3 = gat_params.gat_yeast
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -32,13 +33,13 @@ def optimize(X, A, train_y, train_idx, val_y, val_idx):
             'h_feats': h_feats,
             'heads': heads,
             'dropout': trial.uniform('dropout', 0.02, 0.5),
-            'negative_slope': 0.2 }
+            'negative_slope': 0.2}
 
-        score, _ = train(X, A, 
-                train_y, train_idx, 
-                val_y, val_idx, 
-                params=params, 
-                return_score=True)
+        score, _ = train(X, A,
+                         train_y, train_idx,
+                         val_y, val_idx,
+                         params=params,
+                         return_score=True)
 
     study = optuna.create_study(objective, trials=200)
     study.optimize()
@@ -46,14 +47,14 @@ def optimize(X, A, train_y, train_idx, val_y, val_idx):
     val_auc = study.w
 
 
-def train(params, X, A, 
-        edge_weights,
-        train_y, train_idx, 
-        val_y, val_idx, 
-        return_score=False, 
-        save_best_only=True,
-        savepath='',
- ):
+def train(params, X, A,
+          edge_weights,
+          train_y, train_idx,
+          val_y, val_idx,
+          return_score=False,
+          save_best_only=True,
+          savepath='',
+          ):
 
     epochs = 1000
 
@@ -67,11 +68,12 @@ def train(params, X, A,
         edge_weights = edge_weights.to(DEVICE)
 
     wa = tools.WeightAveraging(model, epochs-500, 100)
-    optimizer = optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
+    optimizer = optim.Adam(
+        model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     loss_fnc = tools.Loss(train_y, train_idx)
     val_loss_fnc = tools.Loss(val_y, val_idx)
 
-    iterable = tqdm(range(epochs)) 
+    iterable = tqdm(range(epochs))
     for i in iterable:
         model.train()
         logits = model(X, A, edge_weights=edge_weights)
@@ -87,7 +89,8 @@ def train(params, X, A,
         train_auc = evalAUC(None, 0, 0, train_y, 0, logits[train_idx])
         val_auc = evalAUC(None, 0, 0, val_y, 0, logits[val_idx])
 
-        tqdm.set_description(iterable, desc='Loss: %.4f ; Val Loss %.4f ; Train AUC %.4f. Validation AUC: %.4f' % (loss, val_loss, train_auc, val_auc))
+        tqdm.set_description(iterable, desc='Loss: %.4f ; Val Loss %.4f ; Train AUC %.4f. Validation AUC: %.4f' % (
+            loss, val_loss, train_auc, val_auc))
 
     wa.set_weights()
     score = evalAUC(model, X, A, val_y, val_idx)
@@ -137,7 +140,6 @@ def get_params(org):
 def get_name(args):
     if args.name:
         return args.name
-
     name = 'GAT'
     if args.no_ppi:
         name += '_NO-PPI'
@@ -147,8 +149,15 @@ def get_name(args):
         name += '_SUB'
     if args.orthologs:
         name += '_ORT'
-
     return name
+
+
+def save_preds(preds, name, args):
+    name = name.lower() + f'_{args.organism}_{args.ppi}.csv'
+    path = os.path.join('preds', name)
+    df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
+    df.to_csv(path)
+    print('Saved the predictions to:', path)
 
 
 def main(args, name='', seed=0, save=True):
@@ -165,18 +174,18 @@ def main(args, name='', seed=0, save=True):
 
     # Getting the data ----------------------------------
     (edge_index, edge_weights), X, (train_idx, train_y), \
-            (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(args.__dict__, seed=0, weights=False)
+        (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(
+            args.__dict__, seed=0, weights=False)
     print('Fetched data')
     # ---------------------------------------------------
 
-
     # Train the model -----------------------------------
-    if args.train: 
+    if args.train:
         print('\nTraining the model')
         gat_params = get_params(args.organism)
-        model = train(gat_params, X, edge_index, edge_weights, train_y, train_idx, val_y, val_idx, savepath=savepath)
+        model = train(gat_params, X, edge_index, edge_weights,
+                      train_y, train_idx, val_y, val_idx, savepath=savepath)
     # ---------------------------------------------------
-
 
     # Load trained model --------------------------------
     print(f'\nLoading the model from: {savepath}')
@@ -186,10 +195,11 @@ def main(args, name='', seed=0, save=True):
     print('Model loaded. Val AUC: {}'.format(snapshot['auc']))
     # ---------------------------------------------------
 
-    
     # Test the model ------------------------------------
     preds, auc = test(model, X, edge_index, (test_idx, test_y))
-    preds = np.concatenate([genes[test_idx].reshape((-1, 1)), preds[test_idx]], axis=1)
+    preds = np.concatenate(
+        [genes[test_idx].reshape((-1, 1)), preds[test_idx]], axis=1)
+    save_preds(preds, name, args)
     print('Test AUC:', auc)
     # ---------------------------------------------------
 
@@ -217,25 +227,24 @@ if __name__ == '__main__':
         try:
             df = pd.read_csv(df_path)
         except:
-            df = pd.DataFrame([], columns=['Model Type','Organism','PPI','Expression','Orthologs','Sublocalization','N Runs','Mean','Std Dev'])
-        df.loc[len(df)] = [name, args.organism, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+            df = pd.DataFrame([], columns=['Model Type', 'Organism', 'PPI', 'Expression',
+                                           'Orthologs', 'Sublocalization', 'N Runs', 'Mean', 'Std Dev'])
+        df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,
+                           args.orthologs, args.sublocs, args.n_runs, mean, std]
         df.to_csv(df_path, index=False)
 
         df_path = f'results/{args.organism}.csv'
         try:
             df = pd.read_csv(df_path)
         except:
-            df = pd.DataFrame([], columns=['name', 'ppi', 'expression', 'orthologs', 'sublocs', 'n_runs', 'mean', 'std'])
-        df.loc[len(df)] = [name, args.ppi, args.expression, args.orthologs, args.sublocs, args.n_runs, mean, std]
+            df = pd.DataFrame([], columns=[
+                              'name', 'ppi', 'expression', 'orthologs', 'sublocs', 'n_runs', 'mean', 'std'])
+        df.loc[len(df)] = [name, args.ppi, args.expression,
+                           args.orthologs, args.sublocs, args.n_runs, mean, std]
         df.to_csv(df_path, index=False)
-
 
         print('Final Result:', mean)
         print(df.tail())
 
-
-
     else:
         main(args, name=name, seed=0)
-
-

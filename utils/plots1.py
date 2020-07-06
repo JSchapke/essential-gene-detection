@@ -9,10 +9,10 @@ human_df = pd.read_csv('results/human_final.csv', header=None)
 fly_df = pd.read_csv('results/melanogaster_final.csv', header=None)
 
 methods = [
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
-        [ 'GAT_EXP_ORT', 'MLP_EXP_ORT', 'SVM_EXP_ORT'], 
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
+        [ 'GAT_EXP_ORT', 'MLP_EXP_ORT', 'SVM_EXP_ORT', 'N2V_EXP_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
 ]
 
 
@@ -34,7 +34,7 @@ ax.set_ylabel('ROC AUC', labelpad=15)
 def plot(ax, df, methods):
     print(df.head())
     width = 0.6
-    labels = ['GAT', 'MLP', 'SVM']
+    labels = ['GAT', 'MLP', 'SVM', 'N2V']
 
     x = np.arange(len(labels))
     means = np.ones(len(labels))

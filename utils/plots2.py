@@ -44,7 +44,7 @@ def plot(ax, df, methods):
             ax.fill_between(x_labels, y_values-std, y_values+std, alpha=0.2) #, edgecolor='#CC4F1B', facecolor='#FF9848')
 
         ax.legend(loc='best')
-        ax.set_ylim(top=1, bottom=0.5)
+        ax.set_ylim(top=1, bottom=0.4)
 
 
 # Set common labels

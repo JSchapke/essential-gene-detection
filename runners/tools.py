@@ -1,12 +1,14 @@
 import sys; sys.path.append('.')
 import argparse
+
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split as tts
-from sklearn.feature_selection import SelectKBest, chi2
 import torch.nn.functional as F
 
-from utils import *
+from utils import utils
+
 class Loss():
     def __init__(self, y, idx):
         self.y = y
@@ -60,7 +62,7 @@ def get_args(parse=True):
     parser.add_argument('--optimize', action='store_true', help='Hyperparamters search')
     parser.add_argument('--n_runs', type=int, default=0, help='How many runs to perform for consistency')
     parser.add_argument('--organism', default='yeast', help='Organism. ["yeast", "coli", "melanogaster", "human"]')
-    parser.add_argument('--ppi', default='biogrid', help='PPI Network. ["biogird", "string", "dip"]')
+    parser.add_argument('--ppi', default='biogrid', help='PPI Network. ["biogrid", "string", "dip"]')
     parser.add_argument('--string_thr', default=500, type=int, help='Connection threshold for STRING PPI database')
     parser.add_argument('--expression', action='store_true', help='Wheter to use expression data')
     parser.add_argument('--orthologs', action='store_true', help='Wheter to use orthology data')
@@ -93,8 +95,10 @@ def dim_reduction_cor(X, y, k=20):
 
 def get_data(args, seed=0, parse=True, weights=False):
     # Getting the data ----------------------------------
+    default_args = dict(string_thr=500, use_weights=False, no_ppi=False)
+    args = dict(default_args, **args)
 
-    (edges, edge_weights), X, train_ds, test_ds, genes = data(
+    (edges, edge_weights), X, train_ds, test_ds, genes = utils.data(
             organism=args['organism'], 
             ppi=args['ppi'], 
             expression=args['expression'], 
@@ -167,7 +171,7 @@ def get_data(args, seed=0, parse=True, weights=False):
 
     red_idx = np.concatenate([train_idx, test_idx, val_idx], 0)
     red_y = np.concatenate([train[:, 1], test_ds[:, 1], val[:, 1]], 0)
-    red_X = (X - X.min(0)) / (X.max(0) - X.min(0))
+    red_X = (X - X.min(0)) / (X.max(0) - X.min(0) + 1e-8)
     feats, cors = dim_reduction_cor(red_X[red_idx], red_y.astype(np.float32), k=k)
     X = X[:, feats]
 
