@@ -3,23 +3,26 @@ Methods based on formulas
 '''
 import os
 import argparse
-import sys; sys.path.append('.')
+import sys
+sys.path.append('.')
 import numpy as np
 import pandas as pd
 import networkx as nx
 from sklearn.metrics import roc_auc_score, roc_curve
 import matplotlib.pyplot as plt
 
-import utils 
+from utils import utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--organism', default='yeast')
 parser.add_argument('--ppi', default='biogrid')
-parser.add_argument('--string_thr', default=500, type=int, help='Connection threshold for STRING PPI database')
+parser.add_argument('--string_thr', default=500, type=int,
+                    help='Connection threshold for STRING PPI database')
 parser.add_argument('--n_runs', default=1, type=int)
 args = parser.parse_args()
 
 # Neighborhood based methods
+
 
 def DC(G, test_X):
     '''
@@ -60,6 +63,7 @@ def LAC(G, test_X):
     preds = np.stack([test_X, preds], axis=1)
     return preds
 
+
 def NC(G, test_X):
     '''
     Edge clustering coefficient centrality
@@ -85,6 +89,7 @@ def NC(G, test_X):
     preds = np.stack([test_X, preds], axis=1)
     return preds
 
+
 def align(test, probs):
     preds, y = [], []
     for prob in probs:
@@ -96,16 +101,15 @@ def align(test, probs):
     y = np.array(y, dtype=np.float32)
     return y, preds
 
+
 def plot_results(root, test):
     for f in os.listdir(root):
         if not f.endswith('.npy'):
             continue
         path = os.path.join(root, f)
         probs = np.load(path, allow_pickle=True)
-        print(f, probs.shape, test.shape)
         y, preds = align(test, probs)
-        print(len(y), len(preds))
-        fpr, tpr, _ = roc_curve(y, preds) 
+        fpr, tpr, _ = roc_curve(y, preds)
         roc_auc = roc_auc_score(y, preds)
 
         lw = 2
@@ -120,18 +124,28 @@ def plot_results(root, test):
     plt.title('Results on Essential Genes dataset')
     plt.legend(loc="lower right")
     plt.savefig(os.path.join(root, 'results.png'))
-        
+
 
 def test_auc(test, preds):
-    y, preds = align(test, preds) 
-    fpr, tpr, _ = roc_curve(y, preds) 
+    y, preds = align(test, preds)
+    fpr, tpr, _ = roc_curve(y, preds)
     roc_auc = roc_auc_score(y, preds)
     return roc_auc
 
+def save_preds(preds, name, args):
+    name = name + f'_{args.organism}_{args.ppi}.csv'
+    name = name.lower()
+    path = os.path.join('preds', name)
+    df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
+    df.to_csv(path)
+    print('Saved the predictions to:', path)
+
+
 def run(seed=0, save=True, update=True):
     # Getting the data ----------------------------------
-    (edges, _), _, _, test, genes = utils.data(organism=args.organism, ppi=args.ppi, seed=seed)
-    
+    (edges, _), _, _, test, genes = utils.data(
+        organism=args.organism, ppi=args.ppi, seed=seed)
+
     G = nx.Graph()
     G.add_edges_from(edges)
 
@@ -139,12 +153,15 @@ def run(seed=0, save=True, update=True):
 
     DC_results = DC(G, test_X)
     DC_auc = test_auc(test, DC_results)
+    save_preds(DC_results, 'DC', args)
 
     LAC_results = LAC(G, test_X)
     LAC_auc = test_auc(test, LAC_results)
+    save_preds(LAC_results, 'LAC', args)
 
     NC_results = NC(G, test_X)
     NC_auc = test_auc(test, NC_results)
+    save_preds(NC_results, 'NC', args)
 
     return DC_auc, LAC_auc, NC_auc
 
@@ -153,11 +170,15 @@ def write_results(path, DC_aucs, LAC_aucs, NC_aucs):
     if os.path.isfile(path):
         df = pd.read_csv(path)
     else:
-        df = pd.DataFrame(columns=['Model Type', 'Organism', 'PPI', 'Expression', 'Orthologs', 'Sublocalization', 'N Runs', 'Mean', 'Std Dev'])
+        df = pd.DataFrame(columns=['Model Type', 'Organism', 'PPI', 'Expression',
+                                   'Orthologs', 'Sublocalization', 'N Runs', 'Mean', 'Std Dev'])
 
-    df.loc[len(df)] = ['DC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(DC_aucs), np.std(DC_aucs)]
-    df.loc[len(df)] = ['LAC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(LAC_aucs), np.std(LAC_aucs)]
-    df.loc[len(df)] = ['NC', args.organism, args.ppi, '', '', '', args.n_runs, np.mean(NC_aucs), np.std(NC_aucs)]
+    df.loc[len(df)] = ['DC', args.organism, args.ppi, '', '', '',
+                       args.n_runs, np.mean(DC_aucs), np.std(DC_aucs)]
+    df.loc[len(df)] = ['LAC', args.organism, args.ppi, '', '', '',
+                       args.n_runs, np.mean(LAC_aucs), np.std(LAC_aucs)]
+    df.loc[len(df)] = ['NC', args.organism, args.ppi, '', '', '',
+                       args.n_runs, np.mean(NC_aucs), np.std(NC_aucs)]
     df.to_csv(path, index=False)
 
 
@@ -171,7 +192,6 @@ if __name__ == '__main__':
         DC_aucs.append(dc)
         LAC_aucs.append(lac)
         NC_aucs.append(nc)
-
 
     path1 = 'results/results.csv'
     write_results(path1, DC_aucs, LAC_aucs, NC_aucs)
