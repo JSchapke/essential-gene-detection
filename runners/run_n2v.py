@@ -16,6 +16,7 @@ from runners.run_mlp import mlp_fit_predict
 from utils.utils import *
 from runners import tools
 
+
 PARAMS = {
     'embedding_dim': 128,
     'walk_length': 64,
@@ -27,7 +28,6 @@ LR = 1e-2
 WEIGHT_DECAY = 5e-4
 EPOCHS = 100
 DEV = torch.device('cuda')
-
 EPOCHS = 20
 
 
@@ -123,7 +123,7 @@ def main(args):
         test_genes = names[test_idx].reshape(-1, 1)
         test_y = test_y.reshape(-1, 1)
         preds = np.concatenate([probs, test_genes, test_y], axis=1)
-        save_preds(preds, args)
+        save_preds(preds, args, seed)
 
     print('Auc(all):', roc_aucs)
     print('Auc:', np.mean(roc_aucs))
@@ -134,7 +134,7 @@ def get_name(args):
     if args.name:
         return args.name
 
-    name = 'N2V' 
+    name = 'N2V'
     if args.no_ppi:
         name += '_NO-PPI'
     if args.expression:
@@ -147,13 +147,14 @@ def get_name(args):
     return name
 
 
-def save_preds(preds, args):
-    name = get_name(args) + f'_{args.organism}_{args.ppi}.csv'
+def save_preds(preds, args, seed):
+    name = get_name(args) + f'_{args.organism}_{args.ppi}_s{seed}.csv'
     name = name.lower()
     path = os.path.join('preds', name)
-    df = pd.DataFrame(preds, columns=['Gene', 'Pred', 'Label'])
+    df = pd.DataFrame(preds, columns=['Pred', 'Gene', 'Label'])
     df.to_csv(path)
     print('Saved the predictions to:', path)
+
 
 if __name__ == '__main__':
     parser = tools.get_args(parse=False)

@@ -32,7 +32,7 @@ def main(args):
         roc_aucs.append(roc_auc)
 
         p = np.stack([names[test_idx], probs], axis=1)
-        save_preds(p, args)
+        save_preds(p, args, seed)
 
     print('Auc(all):', roc_aucs)
     print('Auc:', np.mean(roc_aucs))
@@ -57,8 +57,8 @@ def get_name(args):
     return name
 
 
-def save_preds(preds, args):
-    name = get_name(args) + f'_{args.organism}_{args.ppi}.csv'
+def save_preds(preds, args, seed):
+    name = get_name(args) + f'_{args.organism}_{args.ppi}_s{seed}.csv'
     name = name.lower()
     path = os.path.join('preds', name)
     df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
