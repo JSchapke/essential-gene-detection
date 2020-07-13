@@ -22,7 +22,11 @@ GAT_P3 = gat_params.gat_yeast
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def optimize(X, A, train_y, train_idx, val_y, val_idx):
+def optimize(args):
+    (edge_index, edge_weights), X, (train_idx, train_y), \
+        (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(
+            args.__dict__, seed=seed, weights=False)
+
     def objective(trial):
         n_layers = trial.uniform('n_layers', 1, 4)
         h_feats = [trial.uniform(f'h_feat_{i}', 4, 32)
@@ -43,7 +47,7 @@ def optimize(X, A, train_y, train_idx, val_y, val_idx):
                          params=params,
                          return_score=True)
 
-    study = optuna.create_study(objective, trials=200)
+    study = optuna.load_study(objective, trials=200, storage='sqlite:///example.db')
     study.optimize()
     best_params = study.best_params
     val_auc = study.w
@@ -213,7 +217,9 @@ if __name__ == '__main__':
 
     name = get_name(args)
 
-    if args.n_runs:
+    if args.hyper_search:
+
+    elif args.n_runs:
         args.train = True
         args.test = True
 
