@@ -1,4 +1,3 @@
-#from torch_geometric.nn import GATConv
 import torch.nn.functional as F
 import torch.nn as nn
 import torch

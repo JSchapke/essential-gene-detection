@@ -7,9 +7,6 @@ from gat_pytorch import GAT
 from utils import *
 
 
-def visu_data(model, input):
-    pass
-
 def main(savepath, predspath, organism, ppi):
     # Data ----------------------------------------
     if organism == 'yeast':
@@ -44,7 +41,6 @@ def main(savepath, predspath, organism, ppi):
 
     # Node -----------------------------------
     i = -45 # 13 neigs
-    #i = -12 # 29 neigs
     max_idx = pred_y.argsort()[i]
     max_name = test_names[max_idx]
     print('Chosen Idx / Prediction Prob / GroundTruth:', max_idx, pred_y[max_idx], test_y[max_idx])
