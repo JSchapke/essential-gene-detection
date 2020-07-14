@@ -1,5 +1,6 @@
 import os
 import sys
+from pprint import pprint
 sys.path.append('.')
 
 import pandas as pd
@@ -16,48 +17,60 @@ from models.gat import params as gat_params
 from utils.utils import *
 from runners import tools
 
-GAT_P1 = gat_params.gat_0
-GAT_P2 = gat_params.gat_fly
-GAT_P3 = gat_params.gat_yeast
+
+#GAT_P1 = gat_params.gat_0
+#GAT_P2 = gat_params.gat_fly
+#GAT_P3 = gat_params.gat_yeast
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def optimize(args):
+def hyper_search(args):
+    seed = np.random.randint(1000)
     (edge_index, edge_weights), X, (train_idx, train_y), \
         (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(
             args.__dict__, seed=seed, weights=False)
 
     def objective(trial):
-        n_layers = trial.uniform('n_layers', 1, 4)
-        h_feats = [trial.uniform(f'h_feat_{i}', 4, 32)
-                   for i in range(n_layers)]
-        heads = [trial.uniform(f'head_{i}', 1, 12) for i in range(n_layers)]
+        linear_layer = trial.suggest_categorical(f'linear_layer', [None, 8, 16, 32, 64, 128])
+
+        n_layers = trial.suggest_int('n_layers', 1, 2)
+        h_feats = [trial.suggest_categorical(f'h_feat_{i}', [8, 16, 32]) for i in range(n_layers)]
+        h_feats += [1]
+
+        heads = [trial.suggest_categorical(f'head_{i}', [1, 2, 4]) for i in range(n_layers+1)]
 
         params = {
-            'lr': trial.loguniform('lr', 5e-3, 1e-5),
-            'weight_decay': trial.loguniform('weight_decay', 5e-4, 1e-6),
+            'lr': trial.suggest_loguniform('lr', 1e-5, 5e-3),
+            'weight_decay': trial.suggest_loguniform('weight_decay', 1e-6, 5e-4),
             'h_feats': h_feats,
             'heads': heads,
-            'dropout': trial.uniform('dropout', 0.02, 0.5),
+            'dropout': trial.suggest_uniform('dropout', 0.01, 0.7),
             'negative_slope': 0.2}
 
-        score, _ = train(X, A,
-                         train_y, train_idx,
-                         val_y, val_idx,
-                         params=params,
-                         return_score=True)
+        model = train(params, X, edge_index, edge_weights,
+                      train_y, train_idx,
+                      val_y, val_idx)
 
-    study = optuna.load_study(objective, trials=200, storage='sqlite:///example.db')
-    study.optimize()
+        # Test the model ------------------------------------
+        preds, auc = test(model, X, edge_index, (test_idx, test_y))
+        return auc
+
+    study = optuna.create_study(
+        study_name=f'gat_{args.organism}',
+        direction='maximize',
+        load_if_exists=True,
+        storage=f'sqlite:///outputs/studies/gat_{args.organism}.db')
+    study.optimize(objective, n_trials=0)
     best_params = study.best_params
-    val_auc = study.w
+    print('Best Params:', best_params)
+    df = study.trials_dataframe()
+    print(df.head())
 
 
 def train(params, X, A,
           edge_weights,
           train_y, train_idx,
           val_y, val_idx,
-          return_score=False,
           save_best_only=True,
           savepath='',
           ):
@@ -111,8 +124,6 @@ def train(params, X, A,
         }
         torch.save(save, savepath)
 
-    if return_score:
-        return score, model
     return model
 
 
@@ -136,11 +147,17 @@ def test(model, X, A, test_ds=None):
 
 def get_params(org):
     if org == 'melanogaster':
-        return GAT_P2
+        params = gat_params.gat_fly
     elif org == 'yeast':
-        return GAT_P3
-    else:
-        return GAT_P1
+        params = gat_params.gat_yeast
+    elif org == 'human':
+        params = gat_params.gat_human
+    elif org == 'coli':
+        params = gat_params.gat_coli
+
+    print('Gat Params:')
+    pprint(params)
+    return params
 
 
 def get_name(args):
@@ -160,7 +177,7 @@ def get_name(args):
 
 def save_preds(preds, name, args, seed):
     name = name.lower() + f'_{args.organism}_{args.ppi}_s{seed}.csv'
-    path = os.path.join('preds', name)
+    path = os.path.join('outputs/preds', name)
 
     df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
     df.to_csv(path)
@@ -175,8 +192,8 @@ def main(args, name='', seed=0, save=True):
         if args.__dict__[p]:
             snapshot_name += f'_{p}'
 
-    weightsdir = './models/gat/weights'
-    outdir = './results/{args.organism}/gat'
+    weightsdir = './outputs/weights/gat'
+    outdir = './outputs/results/{args.organism}/gat'
     savepath = os.path.join(weightsdir, snapshot_name)
 
     # Getting the data ----------------------------------
@@ -218,6 +235,7 @@ if __name__ == '__main__':
     name = get_name(args)
 
     if args.hyper_search:
+        hyper_search(args)
 
     elif args.n_runs:
         args.train = True
@@ -233,7 +251,7 @@ if __name__ == '__main__':
         mean = np.mean(scores)
         std = np.std(scores)
 
-        df_path = 'results/results.csv'
+        df_path = './outputs/results/results.csv'
         try:
             df = pd.read_csv(df_path)
         except:
@@ -243,7 +261,7 @@ if __name__ == '__main__':
                            args.orthologs, args.sublocs, args.n_runs, mean, std]
         df.to_csv(df_path, index=False)
 
-        df_path = f'results/{args.organism}.csv'
+        df_path = f'./outputs/results/{args.organism}.csv'
         try:
             df = pd.read_csv(df_path)
         except:

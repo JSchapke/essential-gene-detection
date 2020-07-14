@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import roc_auc_score
 
-from utils import *
+from utils.utils import set_seed
 import tools
 
 
@@ -101,7 +101,7 @@ def main(args):
     roc_aucs = []
     for i in range(args.n_runs):
         seed = i
-        # set_seed(seed)
+        set_seed(seed)
 
         _, X, (train_idx, train_y), (val_idx, val_y), (test_idx,
                                                        test_y), names = tools.get_data(args.__dict__, seed=seed)
@@ -132,7 +132,7 @@ def main(args):
 def save_preds(preds, args, seed):
     name = get_name(args) + f'_{args.organism}_{args.ppi}_s{seed}.csv'
     name = name.lower()
-    path = os.path.join('preds', name)
+    path = os.path.join('outputs/preds/', name)
     df = pd.DataFrame(preds, columns=['Gene', 'Pred'])
     df.to_csv(path)
     print('Saved the predictions to:', path)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     name = get_name(args)
 
-    df_path = 'results/results.csv'
+    df_path = 'outputs/results/results.csv'
     df = pd.read_csv(df_path)
 
     df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,

@@ -59,7 +59,7 @@ def get_args(parse=True):
     # Args ----------------------------------------------------------
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--train', action='store_true', help='Train the model (else will search for saved checkpoints)')
-    parser.add_argument('--optimize', action='store_true', help='Hyperparamters search')
+    parser.add_argument('--hyper_search', action='store_true', help='Hyperparamters search')
     parser.add_argument('--n_runs', type=int, default=0, help='How many runs to perform for consistency')
     parser.add_argument('--organism', default='yeast', help='Organism. ["yeast", "coli", "melanogaster", "human"]')
     parser.add_argument('--ppi', default='biogrid', help='PPI Network. ["biogrid", "string", "dip"]')
@@ -152,7 +152,7 @@ def get_data(args, seed=0, parse=True, weights=False):
     X = np.concatenate([X, degrees.reshape((-1, 1))], 1)
     X = (X - X.mean(0, keepdims=True)) / (X.std(0, keepdims=True) + 1e-8)
         
-    train, val = tts(train_ds, test_size=0.2, stratify=train_ds[:, 1], random_state=seed)
+    train, val = tts(train_ds, test_size=0.1, stratify=train_ds[:, 1], random_state=seed)
 
     train_idx = [mapping[t] for t in train[:, 0]]
     val_idx = [mapping[v] for v in val[:, 0]]
@@ -171,8 +171,7 @@ def get_data(args, seed=0, parse=True, weights=False):
 
     red_idx = np.concatenate([train_idx, test_idx, val_idx], 0)
     red_y = np.concatenate([train[:, 1], test_ds[:, 1], val[:, 1]], 0)
-    red_X = (X - X.min(0)) / (X.max(0) - X.min(0) + 1e-8)
-    feats, cors = dim_reduction_cor(red_X[red_idx], red_y.astype(np.float32), k=k)
+    feats, cors = dim_reduction_cor(X[red_idx], red_y.astype(np.float32), k=k)
     X = X[:, feats]
 
 

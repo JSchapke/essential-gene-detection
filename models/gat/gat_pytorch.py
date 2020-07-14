@@ -1,8 +1,6 @@
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
-
-import torch
 from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
@@ -111,10 +109,18 @@ class GAT(nn.Module):
             heads=[8, 8, 4],  
             dropout=0.6,
             negative_slope=0.2,
+            linear_layer=None,
             **kwargs):
         super(GAT, self).__init__()
         self.dropout = dropout
         self.layers = nn.ModuleList()
+
+        self.linear_layer = linear_layer
+        if self.linear_layer is not None: 
+            print('Applying linear')
+            self.linear = nn.Linear(in_feats, linear_layer)
+
+        in_feats = in_feats if linear_layer is None else linear_layer
         for i, h_feat in enumerate(h_feats):
             last = i + 1 == len(h_feats)
             self.layers.append(GATConv(in_feats, h_feat, 
@@ -124,6 +130,10 @@ class GAT(nn.Module):
             in_feats = h_feat * heads[i]
 
     def forward(self, X, A, edge_weights=None, return_alphas=False):
+        if self.linear_layer is not None:
+            X = self.linear(X)
+            #X = F.relu(X)
+
         alphas = []
         for layer in self.layers[:-1]:
             if return_alphas:
