@@ -71,6 +71,7 @@ def get_args(parse=True):
     parser.add_argument('--use_weights', action='store_true', help='Wether to use StringDB weights for connections')
     parser.add_argument('--name', default='', help="Name for the results csv")
     parser.add_argument('--weightsdir', default='', help="Directory for the model's weights")
+    parser.add_argument('--seed', default=0, type=int, help="Seed used for training")
     parser.add_argument('--outdir', default='', help='Output directory')
 
     if not parse:
@@ -152,7 +153,7 @@ def get_data(args, seed=0, parse=True, weights=False):
     X = np.concatenate([X, degrees.reshape((-1, 1))], 1)
     X = (X - X.mean(0, keepdims=True)) / (X.std(0, keepdims=True) + 1e-8)
         
-    train, val = tts(train_ds, test_size=0.1, stratify=train_ds[:, 1], random_state=seed)
+    train, val = tts(train_ds, test_size=0.05, stratify=train_ds[:, 1], random_state=seed)
 
     train_idx = [mapping[t] for t in train[:, 0]]
     val_idx = [mapping[v] for v in val[:, 0]]

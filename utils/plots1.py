@@ -3,16 +3,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-yeast_df = pd.read_csv('results/yeast_final.csv', header=None)
-coli_df = pd.read_csv('results/coli_final.csv', header=None)
-human_df = pd.read_csv('results/human_final.csv', header=None)
-fly_df = pd.read_csv('results/melanogaster_final.csv', header=None)
+yeast_df = pd.read_csv('outputs/results/yeast_final.csv')
+coli_df = pd.read_csv('outputs/results/coli_final.csv')
+human_df = pd.read_csv('outputs/results/human_final.csv')
+fly_df = pd.read_csv('outputs/results/melanogaster_final.csv')
 
 methods = [
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
-        [ 'GAT_EXP_ORT', 'MLP_EXP_ORT', 'SVM_EXP_ORT', 'N2V_EXP_ORT'], 
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
-        ['GAT_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
+        [ 'GAT_EXP_ORT', 'N2V_EXP_ORT', 'MLP_EXP_ORT', 'SVM_EXP_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
+        ['GAT_EXP_SUB_ORT', 'N2V_EXP_SUB_ORT', 'MLP_EXP_SUB_ORT', 'SVM_EXP_SUB_ORT'], 
 ]
 
 
@@ -30,11 +30,11 @@ ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
 
 ax.set_ylabel('ROC AUC', labelpad=15)
 
+colors = ['#E24A33', '#348ABD', '#FBC15E', '#8EBA42', '#FFB5B8', '#988ED5', ]
 
 def plot(ax, df, methods):
-    print(df.head())
     width = 0.6
-    labels = ['GAT', 'MLP', 'SVM', 'N2V']
+    labels = ['GAT', 'N2V', 'MLP', 'SVM']
 
     x = np.arange(len(labels))
     means = np.ones(len(labels))
@@ -45,7 +45,6 @@ def plot(ax, df, methods):
         means[i] = df[mask][7]
         stds[i] = df[mask][8]
 
-    colors = [c['color'] for c in list(plt.rcParams['axes.prop_cycle'])]
     rects1 = ax.bar(x, means, width, yerr=stds, align='center', color=colors[:len(labels)], capsize=5)
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -76,5 +75,5 @@ plot(ax, fly_df, methods[3])
 
 #fig.subplots_adjust(top=0.90, bottom=0.12, left=0.07, right=1, hspace=0.3)
 plt.suptitle('Benchmark of machine learning methods', fontsize=15)
-plt.savefig(f'plots/aucs1.pdf')
+plt.savefig(f'outputs/plots/aucs1.pdf')
 plt.show()

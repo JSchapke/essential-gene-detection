@@ -17,53 +17,68 @@ from models.gat import params as gat_params
 from utils.utils import *
 from runners import tools
 
+GAT_P1 = gat_params.gat_0
+GAT_P2 = gat_params.gat_fly
+GAT_P3 = gat_params.gat_yeast
 
-#GAT_P1 = gat_params.gat_0
-#GAT_P2 = gat_params.gat_fly
-#GAT_P3 = gat_params.gat_yeast
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def hyper_search(args):
-    seed = np.random.randint(1000)
-    (edge_index, edge_weights), X, (train_idx, train_y), \
-        (val_idx, val_y), (test_idx, test_y), genes = tools.get_data(
-            args.__dict__, seed=seed, weights=False)
+    seed = np.random.randint(1000) + 10 # skip test seeds
+    data = [
+        tools.get_data(args.__dict__, seed=seed, weights=False),
+        tools.get_data(args.__dict__, seed=seed+1, weights=False),
+        tools.get_data(args.__dict__, seed=seed+2, weights=False),
+    ]
 
     def objective(trial):
-        linear_layer = trial.suggest_categorical(f'linear_layer', [None, 8, 16, 32, 64, 128])
+        linear_layer = trial.suggest_categorical(
+            f'linear_layer', [None, 64, 128, 256])
+        linear_layer = None
 
-        n_layers = trial.suggest_int('n_layers', 1, 2)
-        h_feats = [trial.suggest_categorical(f'h_feat_{i}', [8, 16, 32]) for i in range(n_layers)]
+        n_layers = trial.suggest_int('n_layers', 1, 3)
+        h_feats = [trial.suggest_categorical(
+            f'h_feat_{i}', [8, 16, 32, 64]) for i in range(n_layers)]
         h_feats += [1]
 
-        heads = [trial.suggest_categorical(f'head_{i}', [1, 2, 4]) for i in range(n_layers+1)]
+        heads = [trial.suggest_categorical(
+            f'head_{i}', [1, 2, 4, 8]) for i in range(n_layers+1)]
 
         params = {
-            'lr': trial.suggest_loguniform('lr', 1e-5, 5e-3),
-            'weight_decay': trial.suggest_loguniform('weight_decay', 1e-6, 5e-4),
+            'lr': trial.suggest_loguniform('lr', 1e-4, 1e-2),
+            'weight_decay': trial.suggest_loguniform('weight_decay', 1e-5, 1e-3),
             'h_feats': h_feats,
             'heads': heads,
-            'dropout': trial.suggest_uniform('dropout', 0.01, 0.7),
+            'dropout': trial.suggest_uniform('dropout', 0.1, 0.7),
             'negative_slope': 0.2}
 
-        model = train(params, X, edge_index, edge_weights,
-                      train_y, train_idx,
-                      val_y, val_idx)
+        try:
+            final_auc = [] 
+            for d in data:
+                (edge_index, edge_weights), X, (train_idx, train_y), \
+                    (val_idx, val_y), (test_idx, test_y), _ = d
 
-        # Test the model ------------------------------------
-        preds, auc = test(model, X, edge_index, (test_idx, test_y))
-        return auc
+                model = train(params, X, edge_index, edge_weights,
+                              train_y, train_idx, val_y, val_idx)
+
+                preds, auc = test(model, X, edge_index, (test_idx, test_y))
+                final_auc.append(auc)
+
+            return np.mean(final_auc)
+        except:
+            return -1
 
     study = optuna.create_study(
         study_name=f'gat_{args.organism}',
         direction='maximize',
         load_if_exists=True,
         storage=f'sqlite:///outputs/studies/gat_{args.organism}.db')
-    study.optimize(objective, n_trials=0)
+    study.optimize(objective, n_trials=50)
     best_params = study.best_params
     print('Best Params:', best_params)
     df = study.trials_dataframe()
+    df.to_csv('outputs/gat_human_hypersearch.csv')
     print(df.head())
 
 
@@ -86,7 +101,7 @@ def train(params, X, A,
     if edge_weights is not None:
         edge_weights = edge_weights.to(DEVICE)
 
-    wa = tools.WeightAveraging(model, epochs-500, 100)
+    wa = tools.WeightAveraging(model, epochs-200, 25)
     optimizer = optim.Adam(
         model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     loss_fnc = tools.Loss(train_y, train_idx)
@@ -101,7 +116,7 @@ def train(params, X, A,
         loss = loss_fnc(logits)
         loss.backward()
         optimizer.step()
-        wa.step()
+        # wa.step()
 
         logits = logits.detach()
         val_loss = val_loss_fnc(logits)
@@ -111,10 +126,10 @@ def train(params, X, A,
         tqdm.set_description(iterable, desc='Loss: %.4f ; Val Loss %.4f ; Train AUC %.4f. Validation AUC: %.4f' % (
             loss, val_loss, train_auc, val_auc))
 
-    wa.set_weights()
+    # wa.set_weights()
     score = evalAUC(model, X, A, val_y, val_idx)
     print(f'Last validation AUC: {val_auc}')
-    print(f'WA validation AUC: {score}')
+    #print(f'WA validation AUC: {score}')
 
     if savepath:
         save = {
@@ -153,7 +168,8 @@ def get_params(org):
     elif org == 'human':
         params = gat_params.gat_human
     elif org == 'coli':
-        params = gat_params.gat_coli
+        #params = gat_params.gat_coli
+        params = gat_params.gat_0
 
     print('Gat Params:')
     pprint(params)
@@ -223,6 +239,7 @@ def main(args, name='', seed=0, save=True):
     preds, auc = test(model, X, edge_index, (test_idx, test_y))
     preds = np.concatenate(
         [genes[test_idx].reshape((-1, 1)), preds[test_idx]], axis=1)
+    save_preds(preds, name, args, seed=seed)
     print('Test AUC:', auc)
     # ---------------------------------------------------
 
@@ -245,8 +262,6 @@ if __name__ == '__main__':
         for i in range(args.n_runs):
             preds, auc = main(args, name=name, seed=i)
             scores.append(auc)
-
-            save_preds(preds, name, args, seed=i)
 
         mean = np.mean(scores)
         std = np.std(scores)
@@ -275,4 +290,5 @@ if __name__ == '__main__':
         print(df.tail())
 
     else:
-        main(args, name=name, seed=0)
+        print('Training a single run with seed', args.seed)
+        main(args, name=name, seed=args.seed)
