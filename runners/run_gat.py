@@ -166,7 +166,8 @@ def get_params(org):
     elif org == 'yeast':
         params = gat_params.gat_yeast
     elif org == 'human':
-        params = gat_params.gat_human
+        #params = gat_params.gat_human
+        params = gat_params.gat_0
     elif org == 'coli':
         #params = gat_params.gat_coli
         params = gat_params.gat_0

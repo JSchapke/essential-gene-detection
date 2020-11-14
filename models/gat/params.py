@@ -15,6 +15,7 @@ gat_fly = {
     'dropout': 0.6,
     'negative_slope': 0.2}
 
+# Coli and human config:
 gat_0 = {
     'lr': 0.005,
     'weight_decay': 5e-4,

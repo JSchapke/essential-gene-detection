@@ -20,7 +20,8 @@ class GATConv(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
 
-        self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
+        self.weight = Parameter(torch.Tensor(
+            in_channels, heads * out_channels))
 
         self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
@@ -33,20 +34,19 @@ class GATConv(MessagePassing):
 
         self.reset_parameters()
 
-
     def reset_parameters(self):
         glorot(self.weight)
         glorot(self.att)
         zeros(self.bias)
 
-
     def forward(self, x, edge_index, size=None, edge_weights=None, return_alpha=False):
         self.return_alpha = return_alpha
 
         if size is None and torch.is_tensor(x):
-            edge_index, edge_weights = remove_self_loops(edge_index, edge_weights)
-            edge_index, edge_weights = add_self_loops(edge_index, edge_weight=edge_weights, 
-                                                            num_nodes=x.size(self.node_dim))
+            edge_index, edge_weights = remove_self_loops(
+                edge_index, edge_weights)
+            edge_index, edge_weights = add_self_loops(edge_index, edge_weight=edge_weights,
+                                                      num_nodes=x.size(self.node_dim))
 
             self.edge_weights = edge_weights
 
@@ -61,7 +61,6 @@ class GATConv(MessagePassing):
 
         return self.propagate(edge_index, size=size, x=x)
 
-
     def message(self, edge_index_i, x_i, x_j, size_i):
         # Compute attention coefficients.
         x_j = x_j.view(-1, self.heads, self.out_channels)
@@ -72,10 +71,10 @@ class GATConv(MessagePassing):
             alpha = (torch.cat([x_i, x_j], dim=-1) * self.att).sum(dim=-1)
 
         alpha = F.leaky_relu(alpha, self.negative_slope)
-        alpha = softmax(alpha, edge_index_i, size_i)
+        alpha = softmax(alpha, edge_index_i, num_nodes=size_i)
 
         if self.return_alpha:
-            self.alpha = alpha #.detach().cpu().numpy()
+            self.alpha = alpha  # .detach().cpu().numpy()
 
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -85,7 +84,6 @@ class GATConv(MessagePassing):
             return x_j * alpha.view(-1, self.heads, 1) * edge_weights
 
         return x_j * alpha.view(-1, self.heads, 1)
-
 
     def update(self, aggr_out):
         if self.concat is True:
@@ -104,29 +102,29 @@ class GATConv(MessagePassing):
 
 
 class GAT(nn.Module):
-    def __init__(self, in_feats=1, 
-            h_feats=[8, 8, 1], 
-            heads=[8, 8, 4],  
-            dropout=0.6,
-            negative_slope=0.2,
-            linear_layer=None,
-            **kwargs):
+    def __init__(self, in_feats=1,
+                 h_feats=[8, 8, 1],
+                 heads=[8, 8, 4],
+                 dropout=0.6,
+                 negative_slope=0.2,
+                 linear_layer=None,
+                 **kwargs):
         super(GAT, self).__init__()
         self.dropout = dropout
         self.layers = nn.ModuleList()
 
         self.linear_layer = linear_layer
-        if self.linear_layer is not None: 
+        if self.linear_layer is not None:
             print('Applying linear')
             self.linear = nn.Linear(in_feats, linear_layer)
 
         in_feats = in_feats if linear_layer is None else linear_layer
         for i, h_feat in enumerate(h_feats):
             last = i + 1 == len(h_feats)
-            self.layers.append(GATConv(in_feats, h_feat, 
-                                            heads=heads[i], 
-                                            dropout=dropout,
-                                            concat=False if last else True))
+            self.layers.append(GATConv(in_feats, h_feat,
+                                       heads=heads[i],
+                                       dropout=dropout,
+                                       concat=False if last else True))
             in_feats = h_feat * heads[i]
 
     def forward(self, X, A, edge_weights=None, return_alphas=False):
@@ -137,7 +135,8 @@ class GAT(nn.Module):
         alphas = []
         for layer in self.layers[:-1]:
             if return_alphas:
-                X, alpha, _ = layer(X, A, edge_weights=edge_weights, return_alpha=True)
+                X, alpha, _ = layer(
+                    X, A, edge_weights=edge_weights, return_alpha=True)
                 alphas.append(alpha)
             else:
                 X = layer(X, A, edge_weights=edge_weights)
@@ -145,12 +144,10 @@ class GAT(nn.Module):
             X = F.dropout(X, self.dropout)
 
         if return_alphas:
-            X, alpha, edge_index = self.layers[-1](X, A, edge_weights=edge_weights, return_alpha=True)
+            X, alpha, edge_index = self.layers[-1](
+                X, A, edge_weights=edge_weights, return_alpha=True)
             alphas.append(alpha)
             return X, alphas, edge_index
-        
+
         X = self.layers[-1](X, A, edge_weights=edge_weights)
         return X
-
-
-
