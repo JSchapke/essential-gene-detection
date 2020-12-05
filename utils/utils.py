@@ -163,7 +163,9 @@ def data(
             x = np.zeros((len(genes), subloc.shape[1]-1))
             for i, node in enumerate(genes):
                 mask = subloc[:, 0] == node
+                #print(subloc[:,0], node)
                 if np.any(mask):
+                    print(subloc[mask, 1:].astype(float).max(0))
                     x[i] = subloc[mask, 1:].astype(float).max(0)
             X = np.concatenate([X, np.array(x)], axis=1)
 
@@ -184,7 +186,7 @@ def data(
 if __name__ == '__main__':
     edge_info, X, train, test, genes = data(
                 organism='melanogaster', 
-                ppi='dip', 
+                ppi='string', 
                 expression=True,
                 sublocalizations=False,
                 orthologs=True)
