@@ -132,6 +132,8 @@ def data(
             path = os.path.join(
                 DATA_ROOT, f'essential_genes/{organism}/Orthologs/orthologs.csv')
             orths = pd.read_csv(path).set_index('Gene')
+            columns = [f'ortholog_{i}' for i in range(orths.shape[1])]
+            orths.columns = columns
             X = X.join(orths, how="left")
             print('Orthologs dataset shape:', orths.shape)
 
@@ -143,6 +145,8 @@ def data(
                 path = os.path.join(
                     DATA_ROOT, f'essential_genes/{organism}/Expression/profile.csv')
             expression = pd.read_csv(path).set_index('Gene')
+            columns = [f'expression_{i}' for i in range(expression.shape[1])]
+            expression.columns = columns
             X = X.join(expression, how="left")
             print('Gene expression dataset shape:', expression.shape)
 
@@ -150,6 +154,8 @@ def data(
             path = os.path.join(
                 DATA_ROOT, f'essential_genes/{organism}/SubLocalizations/subloc.csv')
             subloc = pd.read_csv(path).set_index('Gene')
+            columns = [f'subloc_{i}' for i in range(subloc.shape[1])]
+            subloc.columns = columns
             X = X.join(subloc, how="left")
             print('Subcellular Localizations dataset shape:', subloc.shape)
 
@@ -165,13 +171,14 @@ def data(
     print(f'X.shape: {None if X is None else X.shape}.')
     print(f'Train labels. Num: {len(train)} ; Num pos: {train.Label.sum()}')
     print(f'Test labels. Num: {len(test)} ; Num pos: {test.Label.sum()}')
+    print(X.head())
     return (edges, edge_weights), X, train, test, genes
 
 
 if __name__ == '__main__':
     edge_info, X, train, test, genes = data(
-        organism='melanogaster',
+        organism='coli',
         ppi='string',
-        expression=False,
-        sublocalizations=True,
-        orthologs=False)
+        expression=True,
+        sublocalizations=False,
+        orthologs=True)
