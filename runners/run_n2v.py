@@ -1,20 +1,14 @@
+import torch.optim as optim
+import torch.nn.functional as F
+import torch.nn as nn
+import torch
+import pandas as pd
+import numpy as np
+from sklearn.svm import SVC
+from torch_geometric.nn.models import Node2Vec
+from sklearn.metrics import roc_auc_score
 import os
 import sys
-sys.path.append('.')
-
-from sklearn.metrics import roc_auc_score
-from torch_geometric.nn.models import Node2Vec
-from sklearn.svm import SVC
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
-from runners.run_mlp import mlp_fit_predict
-from utils.utils import *
-from runners import tools
 
 
 PARAMS = {
@@ -26,9 +20,8 @@ PARAMS = {
 }
 LR = 1e-2
 WEIGHT_DECAY = 5e-4
-EPOCHS = 100
+EPOCHS = 40
 DEV = torch.device('cuda')
-EPOCHS = 20
 
 
 def train_epoch(n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, val_mask, test_mask):
@@ -42,13 +35,14 @@ def train_epoch(n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, v
     n2v.train()
     for i in range(EPOCHS):
         n2v_train_loss = 0
-        for pos_rw, neg_rw in n2v_loader:
+
+        for (pos_rw, neg_rw) in n2v_loader:
             n2v_optimizer.zero_grad()
             loss = n2v.loss(pos_rw.to(DEV), neg_rw.to(DEV))
             loss.backward()
             n2v_optimizer.step()
             n2v_train_loss += loss.data.item()
-        print(f'N2V Train_Loss:', n2v_train_loss)
+        print(f'Epoch {i}. N2V Train_Loss:', n2v_train_loss)
     print('')
     n2v.eval()
     Z = n2v().detach()
@@ -79,7 +73,7 @@ def fit_predict(edge_index, X, train_y, train_mask, val_y, val_mask, test_mask):
     print('Training Node2Vec')
 
     n2v = Node2Vec(edge_index, **PARAMS).to(DEV)
-    n2v_loader = n2v.loader(batch_size=128, shuffle=True, num_workers=4)
+    n2v_loader = n2v.loader(batch_size=128, shuffle=True, num_workers=0)
     n2v_optimizer = optim.Adam(n2v.parameters(), lr=LR)
 
     patience, cur = 10, 0
@@ -104,12 +98,13 @@ def fit_predict(edge_index, X, train_y, train_mask, val_y, val_mask, test_mask):
 
 def main(args):
     roc_aucs = []
-    for i in range(args.n_runs):
+    for i in range(max(args.n_runs, 1)):
         seed = i
         set_seed(seed)
 
-        (edge_index, _), X, (train_idx, train_y), (val_idx, val_y), (test_idx,
-                                                                     test_y), names = tools.get_data(args.__dict__, seed=seed)
+        (edge_index, _), X, (train_idx, train_y), \
+            (val_idx, val_y), (test_idx, test_y), names = tools.get_data(
+                args.__dict__, seed=seed)
 
         if X is None or not X.shape[1]:
             raise ValueError('No features')
@@ -148,6 +143,7 @@ def get_name(args):
 
 
 def save_preds(preds, args, seed):
+    os.makedirs("./preds", exist_ok=True)
     name = get_name(args) + f'_{args.organism}_{args.ppi}_s{seed}.csv'
     name = name.lower()
     path = os.path.join('preds', name)
@@ -157,21 +153,26 @@ def save_preds(preds, args, seed):
 
 
 if __name__ == '__main__':
-    parser = tools.get_args(parse=False)
-    parser.add_argument('--head_type', default='svm',
-                        help='Head for the two step model ["svm", "mlp"]')
-    args = parser.parse_args()
-    print(args)
+    sys.path.append('.')
+    from runners import tools
+    from runners.run_mlp import mlp_fit_predict
+    from utils.utils import *
+
+    args = tools.get_args(parse=True)
+    print("ARGS:", args)
 
     mean, std = main(args)
-    print(mean, std)
 
     name = get_name(args)
 
     df_path = 'results/results.csv'
-    df = pd.read_csv(df_path)
-
+    if os.path.isfile(df_path):
+        df = pd.read_csv(df_path)
+    else:
+        df = pd.DataFrame([], columns=["name", "organism", "ppi",
+                                       "expression", "orthology", "subloc", "n_runs", "mean", "std"])
+        os.makedirs('results', exist_ok=True)
     df.loc[len(df)] = [name, args.organism, args.ppi, args.expression,
                        args.orthologs, args.sublocs, args.n_runs, mean, std]
     df.to_csv(df_path, index=False)
-    # print(df.tail())
+    print(df.tail())

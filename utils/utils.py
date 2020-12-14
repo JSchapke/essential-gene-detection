@@ -80,9 +80,9 @@ def data(
     cache = f'.cache/{organism}/'
     cachepath = cache + \
         f'{expression}_{sublocalizations}_{orthologs}_{ppi}.pkl'
-    os.makedirs(cache, exist_ok=True)
+    #os.makedirs(cache, exist_ok=True)
 
-    if os.path.isfile(cachepath) and not update:
+    if not update and os.path.isfile(cachepath):
         print('Data was cached')
         with open(cachepath, 'rb') as f:
             edges, edge_weights, X, labels, genes = pickle.load(f)
@@ -160,8 +160,8 @@ def data(
             print('Subcellular Localizations dataset shape:', subloc.shape)
 
         # Cache ----------
-        with open(cachepath, 'wb') as f:
-            pickle.dump([edges, edge_weights, X, labels, genes], f, protocol=2)
+        #with open(cachepath, 'wb') as f:
+        #    pickle.dump([edges, edge_weights, X, labels, genes], f, protocol=2)
         # ----------------
 
     train, test = train_test_split(
