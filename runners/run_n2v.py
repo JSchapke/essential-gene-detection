@@ -20,7 +20,7 @@ PARAMS = {
 }
 LR = 1e-2
 WEIGHT_DECAY = 5e-4
-EPOCHS = 40
+EPOCHS = 50
 DEV = torch.device('cuda')
 
 
@@ -70,30 +70,14 @@ def train_epoch(n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, v
 
 
 def fit_predict(edge_index, X, train_y, train_mask, val_y, val_mask, test_mask):
-    print('Training Node2Vec')
-
     n2v = Node2Vec(edge_index, **PARAMS).to(DEV)
     n2v_loader = n2v.loader(batch_size=128, shuffle=True, num_workers=0)
     n2v_optimizer = optim.Adam(n2v.parameters(), lr=LR)
 
-    patience, cur = 10, 0
-    best_auc = 0
-    _probs = None
+    probs, val_roc_auc = train_epoch(
+        n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, val_mask, test_mask)
 
-    for i in range(EPOCHS):
-        probs, val_roc_auc = train_epoch(
-            n2v, n2v_loader, n2v_optimizer, X, train_y, train_mask, val_y, val_mask, test_mask)
-
-        cur += 1
-        if val_roc_auc > best_auc:
-            cur = 0
-            best_auc = val_roc_auc
-            _probs = probs
-        if cur == patience:
-            break
-        print(f'Epoch {i}. Best Auc: {best_auc}')
-
-    return _probs
+    return probs
 
 
 def main(args):
