@@ -65,7 +65,7 @@ def mlp_fit_predict(train_x, train_y, test_x, val=None, return_val_probs=False):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if (i % 20) == 0:
+        if (i % 10) == 0:
             if val is not None:
                 model.eval()
                 with torch.no_grad():
