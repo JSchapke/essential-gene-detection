@@ -1,3 +1,4 @@
+Code for the article: https://arxiv.org/pdf/2007.09671.pdf
 
 To train GAT in a dataset run:
     python runners/run_gat.py <OPTIONS>
