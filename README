@@ -1,4 +1,5 @@
 Code for the article: https://arxiv.org/pdf/2007.09671.pdf
+Data used is available at: https://drive.google.com/file/d/1w2DWc0rxV9BvO3Cfl7Gj2KqkkAYxuDeK/view?usp=sharing
 
 To train GAT in a dataset run:
     python runners/run_gat.py <OPTIONS>
