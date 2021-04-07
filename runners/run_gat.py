@@ -101,7 +101,6 @@ def train(params, X, A,
     if edge_weights is not None:
         edge_weights = edge_weights.to(DEVICE)
 
-    wa = tools.WeightAveraging(model, epochs-200, 25)
     optimizer = optim.Adam(
         model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     loss_fnc = tools.Loss(train_y, train_idx)
@@ -116,7 +115,6 @@ def train(params, X, A,
         loss = loss_fnc(logits)
         loss.backward()
         optimizer.step()
-        # wa.step()
 
         logits = logits.detach()
         val_loss = val_loss_fnc(logits)
@@ -126,10 +124,8 @@ def train(params, X, A,
         tqdm.set_description(iterable, desc='Loss: %.4f ; Val Loss %.4f ; Train AUC %.4f. Validation AUC: %.4f' % (
             loss, val_loss, train_auc, val_auc))
 
-    # wa.set_weights()
     score = evalAUC(model, X, A, val_y, val_idx)
     print(f'Last validation AUC: {val_auc}')
-    #print(f'WA validation AUC: {score}')
 
     if savepath:
         save = {
