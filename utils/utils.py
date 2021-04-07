@@ -10,7 +10,9 @@ import scipy.sparse as sparse
 from os.path import join
 import pickle
 from tqdm import tqdm
-DATA_ROOT = '../data'
+
+
+DATA_ROOT = './data'
 
 
 def evalAUC(model, X, A, y, mask, logits=None):
@@ -140,10 +142,8 @@ def data(
         if expression:
             if organism == 'human':
                 path = os.path.join(
-                    DATA_ROOT, 'essential_genes/human/Expression/expression_64.csv')
-            else:
-                path = os.path.join(
                     DATA_ROOT, f'essential_genes/{organism}/Expression/profile.csv')
+
             expression = pd.read_csv(path).set_index('Gene')
             columns = [f'expression_{i}' for i in range(expression.shape[1])]
             expression.columns = columns
@@ -159,8 +159,10 @@ def data(
             X = X.join(subloc, how="left")
             print('Subcellular Localizations dataset shape:', subloc.shape)
 
+        X = X.fillna(0)
+
         # Cache ----------
-        #with open(cachepath, 'wb') as f:
+        # with open(cachepath, 'wb') as f:
         #    pickle.dump([edges, edge_weights, X, labels, genes], f, protocol=2)
         # ----------------
 
@@ -171,7 +173,7 @@ def data(
     print(f'X.shape: {None if X is None else X.shape}.')
     print(f'Train labels. Num: {len(train)} ; Num pos: {train.Label.sum()}')
     print(f'Test labels. Num: {len(test)} ; Num pos: {test.Label.sum()}')
-    print(X.head())
+    print(X.tail())
     return (edges, edge_weights), X, train, test, genes
 
 
